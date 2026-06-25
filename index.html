@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SCANR v4.8 — Trend &amp; Reversal Scanner</title>
+<title>SCANR v4.12 — Trend, Reversal, Covered-Call, Coiled &amp; Seasonality Scanner</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -149,6 +149,19 @@
   .dfcl-warning { background:var(--red); color:#fff; }
   .dfcl-na { background:#eee; color:#999; }
   .dfcl-routine td { font-size:12.5px; text-align:left; }
+  /* ---- ATR / stop-ladder table ---- */
+  #atrCalc .atr-summary { font-size:13.5px; margin:8px 0 4px 0; }
+  table.atr-ladder { border-collapse:collapse; width:100%; font-size:13px; margin-top:4px; }
+  table.atr-ladder th { background:#eef4ef; color:#2a4f3a; text-align:right; padding:5px 10px; font-size:11px; font-weight:600; border-bottom:1px solid #cfe0d4; white-space:nowrap; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  table.atr-ladder th:first-child { text-align:left; }
+  table.atr-ladder td { padding:6px 10px; border-bottom:1px solid #e8ecea; text-align:right; white-space:nowrap; }
+  table.atr-ladder td:first-child { text-align:left; font-weight:bold; }
+  table.atr-ladder tr:last-child td { border-bottom:none; }
+  .atr-rung { display:inline-block; padding:1px 8px; border-radius:3px; font-size:11.5px; font-weight:bold; color:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .atr-rung.initial { background:#B91C1C; }
+  .atr-rung.breakeven { background:#1857c4; }
+  .atr-rung.trail { background:#15803D; }
+  .atr-stop-val { font-weight:bold; }
   @media print {
     body * { visibility:hidden; }
     #dfChecklistInner, #dfChecklistInner * { visibility:visible; }
@@ -208,7 +221,7 @@
 <div class="wrap">
   <header>
     <h1>SCANR — Trend &amp; Reversal Scanner <svg width="58" height="42" viewBox="0 0 60 44" style="vertical-align:middle; margin-left:6px;" xmlns="http://www.w3.org/2000/svg"><line x1="6" y1="2" x2="6" y2="42" stroke="#555" stroke-width="3" stroke-linecap="round"/><circle cx="6" cy="6" r="3" fill="#777"/><path d="M10 7 L52 12 L52 24 L10 21 Z" fill="#E8721C"/><path d="M10 7 L19 8 L19 20.4 L10 21 Z" fill="#E8721C"/><path d="M19 8 L29 9.2 L29 19.6 L19 20.4 Z" fill="#fff"/><path d="M29 9.2 L40 10.5 L40 18.7 L29 19.6 Z" fill="#E8721C"/><path d="M40 10.5 L52 12 L52 17.8 L40 18.7 Z" fill="#fff"/><path d="M10 7 L10 21 L7 19 L7 9 Z" fill="#c85f12"/></svg></h1>
-    <div class="sub"><span style="background:#1F7A4D; color:#fff; padding:1px 8px; border-radius:4px; font-weight:bold; font-size:11px; margin-right:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact;">v4.8</span>Bullish &amp; bearish setups · Multi-timeframe agreement · Weekly circuit breaker · Alerts · 5-min / 30-min / 60-min / Daily / Weekly</div>
+    <div class="sub"><span style="background:#1F7A4D; color:#fff; padding:1px 8px; border-radius:4px; font-weight:bold; font-size:11px; margin-right:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact;">v4.12</span>Bullish &amp; bearish setups · Multi-timeframe agreement · Covered-call candidates · Coiled / pre-breakout · Seasonality bias · Weekly circuit breaker · Alerts · ATR calculator &amp; stops · 5-min / 30-min / 60-min / Daily / Weekly / Monthly</div>
   </header>
 
   <div class="criteria">
@@ -322,6 +335,15 @@
       <button id="dfChecklistBtn" style="background:#15633D;">DF Checklist</button>
     </div>
     <div class="field">
+      <button id="ccBtn" style="background:#B8762A;">Covered-Call Scan</button>
+    </div>
+    <div class="field">
+      <button class="sec" id="ccLoadWeeklys" title="Fill the ticker box with the maintained weekly-options universe (edit CC_WEEKLYS in the code to curate)">Load weeklys</button>
+    </div>
+    <div class="field">
+      <button id="coilBtn" style="background:#7A3FA0;">Coiled Scan</button>
+    </div>
+    <div class="field">
       <button class="sec" id="printBtn">Print</button>
     </div>
     <div class="field">
@@ -376,6 +398,11 @@
         <input type="checkbox" id="debugChk" style="width:auto;"> Debug (show MA internals)
       </label>
     </div>
+    <div class="field" style="justify-content:flex-end;">
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer;" title="Adds Seasonality columns (this calendar month &amp; this week-of-year) to all scan tables. Requires extra history fetches per symbol, so scans run slower. Backward-looking base rate — context only, not a forecast.">
+        <input type="checkbox" id="seasonChk" style="width:auto;" checked> Seasonality columns (slower)
+      </label>
+    </div>
   </div>
 
   <div id="alertPanel" style="margin:6px 0 0 0; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:#FAFBFF;">
@@ -400,6 +427,23 @@
   </div>
 
   <div class="status" id="status">Ready. Edit the watchlist and click Run Scan.</div>
+
+  <!-- ATR Calculator -->
+  <div id="atrCalc" style="margin:10px 0; padding:12px 14px; border:1px solid var(--border); border-radius:6px; background:#F4FAF6;">
+    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:4px;">
+      <b style="color:var(--accent); font-size:15px;">📐 ATR Calculator &amp; Stop Ladder</b>
+    </div>
+    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
+      <input type="text" id="atrSym" placeholder="Symbol (e.g. AAPL)" style="font-family:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--border); border-radius:4px; width:150px; text-transform:uppercase;">
+      <input type="number" id="atrEntry" placeholder="Entry price (optional)" step="0.01" style="font-family:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--border); border-radius:4px; width:160px;">
+      <input type="number" id="atrCandleLow" placeholder="Entry candle low (intraday)" step="0.01" style="font-family:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--border); border-radius:4px; width:185px;">
+      <input type="date" id="atrEntryDate" title="Entry date (for exact dividend adjustment)" style="font-family:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--border); border-radius:4px;">
+      <label style="font-size:12.5px; color:var(--text); display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="atrAdjEntry" style="width:auto; margin:0;"> Adjust entry for dividends</label>
+      <button id="atrBtn" style="background:#1F7A4D;">Calculate</button>
+    </div>
+    <div id="atrResult" class="atr-summary" style="color:var(--text);"></div>
+    <div id="atrStops" style="display:none; margin-top:8px; padding-top:10px; border-top:1px solid var(--border);"></div>
+  </div>
 
   <div id="printHeader" style="display:none;"></div>
 
@@ -485,6 +529,8 @@
         <th class="tfcell">Weekly</th>
         <th>Score</th>
         <th>Verdict</th>
+        <th class="tfcell" title="Seasonality: this calendar month, historical up-rate">Seas Mo</th>
+        <th class="tfcell" title="Seasonality: this week-of-year, historical up-rate">Seas Wk</th>
       </tr>
     </thead>
     <tbody id="mtfBody"></tbody>
@@ -612,6 +658,103 @@
     </div>
   </div>
   <!-- ===== END CHECKLIST ===== -->
+
+  <!-- ===================== COVERED-CALL CANDIDATES (v4.10) ===================== -->
+  <div id="ccControls" style="display:none; margin:10px 0; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:#FBF6EE;">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <b style="color:#B8762A;">⊞ Covered-Call Candidates</b>
+      <span style="color:var(--muted); font-size:12px;">Income from selling calls on names that are <b>in gear</b> — price &gt; 20MA &gt; 50MA on <b>all three</b> of Monthly · Weekly · Daily — and either <b>flat</b> or <b>mildly rising</b> (not parabolic). Calm-but-live ATR and liquidity also scored. <span style="background:#e7d3b6; padding:0 5px; border-radius:3px;">Wk</span> = weekly-options eligible · <span style="background:#e2e2e2; padding:0 5px; border-radius:3px;">Mo</span> = monthly only</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;">
+      <label for="ccFilter" style="font-size:13px; color:var(--muted);">Show</label>
+      <select id="ccFilter" style="font-family:inherit; font-size:13px; padding:5px 8px; border:1px solid var(--border); border-radius:4px; background:#fff;">
+        <option value="all">All scanned</option>
+        <option value="candidates" selected>In gear &amp; eligible (all 3 TFs stacked)</option>
+        <option value="sideways">In gear · flat only</option>
+        <option value="mildup">In gear · mildly-up only</option>
+        <option value="weekly">Weekly-eligible only</option>
+        <option value="excluded">Not eligible (not in gear / too hot)</option>
+      </select>
+      <button class="sec" id="ccCheckShown">☑ Check all shown</button>
+      <button class="sec" id="ccCheckTop">☑ Check eligible shown</button>
+      <button class="sec" id="ccUncheckShown">☐ Uncheck shown</button>
+      <button class="sec" id="ccCsvBtn">⬇ Export CSV</button>
+    </div>
+    <div style="margin-top:8px; font-size:11.5px; color:var(--muted); line-height:1.5;">
+      <b>What this finds vs. what it can't see:</b> SCANR screens the <b>underlying</b> — regime, volatility, liquidity — to surface good covered-call <i>candidates</i>. It does <b>not</b> see the option chain (live premium, implied vol, strike open-interest, bid/ask spread). Pick the strike and confirm the premium and spreads are worthwhile in your broker's chain. Selling a call caps upside above the strike, so the ideal name drifts sideways or rises gently — not a runaway mover.
+    </div>
+  </div>
+
+  <table id="ccTable" style="display:none;">
+    <thead>
+      <tr>
+        <th style="width:34px; text-align:center;">✓</th>
+        <th>Ticker</th>
+        <th>Opts</th>
+        <th>Price</th>
+        <th class="tfcell">Monthly</th>
+        <th class="tfcell">Weekly</th>
+        <th class="tfcell">Daily</th>
+        <th>ATR%</th>
+        <th>Score</th>
+        <th>Regime</th>
+        <th class="tfcell" title="Seasonality: this calendar month, historical up-rate">Seas Mo</th>
+        <th class="tfcell" title="Seasonality: this week-of-year, historical up-rate">Seas Wk</th>
+      </tr>
+    </thead>
+    <tbody id="ccBody"></tbody>
+  </table>
+  <!-- ===================== END COVERED-CALL ===================== -->
+
+  <!-- ===================== COILED / PRE-BREAKOUT (v4.11) ===================== -->
+  <div id="coilControls" style="display:none; margin:10px 0; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:#F4EEF8;">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <b style="color:#7A3FA0;">⊞ Coiled / Pre-Breakout</b>
+      <span style="color:var(--muted); font-size:12px;">Finds names in a tight <b>coil</b> — deep volatility contraction, volume dry-up, range tightening, MA pinch — <b>before</b> the trigger fires. Scored on <b>Daily</b> and <b>Weekly</b> bases. Lean tag shows where pressure sits: <span style="background:#d9efe0; padding:0 5px; border-radius:3px;">↑</span> up · <span style="background:#f4dada; padding:0 5px; border-radius:3px;">↓</span> down · <span style="background:#f0eee6; padding:0 5px; border-radius:3px;">↔</span> undecided.</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;">
+      <label for="coilFilter" style="font-size:13px; color:var(--muted);">Show</label>
+      <select id="coilFilter" style="font-family:inherit; font-size:13px; padding:5px 8px; border:1px solid var(--border); border-radius:4px; background:#fff;">
+        <option value="coiled" selected>Coiled only (passed the gate)</option>
+        <option value="all">All scanned</option>
+        <option value="up">Coiled · up-lean only</option>
+        <option value="down">Coiled · down-lean only</option>
+        <option value="daily">Coiled on Daily</option>
+        <option value="weekly">Coiled on Weekly</option>
+        <option value="both">Coiled on BOTH timeframes</option>
+        <option value="notcoiled">Not coiled</option>
+      </select>
+      <button class="sec" id="coilCheckShown">☑ Check all shown</button>
+      <button class="sec" id="coilCheckCoiled">☑ Check coiled shown</button>
+      <button class="sec" id="coilUncheckShown">☐ Uncheck shown</button>
+      <button class="sec" id="coilCsvBtn">⬇ Export CSV</button>
+    </div>
+    <div style="margin-top:8px; font-size:11.5px; color:var(--muted); line-height:1.5;">
+      <b>What a coil is — and what it isn't:</b> Big moves come out of quiet, not chaos. SCANR measures the coiled <i>condition</i> (contraction + dry-up + pinch) from price/volume. It does <b>NOT</b> predict the move and cannot see what releases the spring — the <b>catalyst, options flow (call skew/IV), short interest, or float</b> aren't in the equity feed. A coil can sit for weeks, deflate, or resolve the "wrong" way. Use this as a watchlist: surface the loaded names, then check the catalyst and options picture in your broker before acting. <b>Direction is genuinely undecided</b> in a coil — the lean tag is pressure, not a forecast.
+    </div>
+  </div>
+
+  <table id="coilTable" style="display:none;">
+    <thead>
+      <tr>
+        <th style="width:34px; text-align:center;">✓</th>
+        <th>Ticker</th>
+        <th>Price</th>
+        <th>Coil score</th>
+        <th class="tfcell">Daily</th>
+        <th class="tfcell">Weekly</th>
+        <th>ATR% (D)</th>
+        <th>Vol dry</th>
+        <th>MA pinch</th>
+        <th>Lean</th>
+        <th>vs SPY</th>
+        <th class="tfcell" title="Seasonality: this calendar month, historical up-rate">Seas Mo</th>
+        <th class="tfcell" title="Seasonality: this week-of-year, historical up-rate">Seas Wk</th>
+      </tr>
+    </thead>
+    <tbody id="coilBody"></tbody>
+  </table>
+  <!-- ===================== END COILED ===================== -->
 
   <div class="legend">
     <b>Cross bar</b> = how many bars ago the 20MA crossed above the 50MA (0 = current bar). A green <span class="tag pass">PASS</span> row means all five conditions are met. "Cross↑" requires the 20MA to be above the 50MA now <i>and</i> below it at the start of the lookback window — a fresh cross, not an old one.
@@ -844,6 +987,8 @@ async function fetchChart(ticker, timeframe, rangeOverride) {
     ? { range: "3mo", interval: "60m" }
     : timeframe === "1wk"
     ? { range: rangeOverride || "3y", interval: "1wk" }
+    : timeframe === "1mo"
+    ? { range: rangeOverride || "10y", interval: "1mo" }
     : { range: "8mo", interval: "1d" };
   const base = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${cfg.range}&interval=${cfg.interval}`;
   const PROXY_NAMES = ["Worker", "corsproxy", "allorigins", "thingproxy"];
@@ -939,6 +1084,155 @@ function clean(o, h, l, c, v, adj) {
   }
   return { O, H, L, C, V, A };
 }
+
+// Adjusted/raw ratio on (or nearest to) a given entry date, using the chart's
+// timestamp array aligned with raw close + adjclose. Returns:
+//   { ratio, exact:true }                if the entry date is within the data window
+//   { ratio, exact:false, oldest:true }  if entry predates the window (fallback to oldest)
+//   null                                  if no usable data
+function adjRatioOnDate(result, entryDateStr) {
+  const ts = result.timestamp;
+  const q = result.indicators.quote[0];
+  const adj = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+  if (!ts || !q || !adj) return null;
+  const c = q.close;
+  // Build aligned (date, ratio) list over valid bars.
+  const rows = [];
+  for (let i = 0; i < ts.length; i++) {
+    if (c[i] == null || adj[i] == null || c[i] === 0) continue;
+    rows.push({ t: ts[i] * 1000, ratio: adj[i] / c[i] });
+  }
+  if (!rows.length) return null;
+  const target = new Date(entryDateStr + "T00:00:00").getTime();
+  if (isNaN(target)) return null;
+  // If entry predates the earliest bar, fall back to the oldest ratio.
+  if (target < rows[0].t) return { ratio: rows[0].ratio, exact: false, oldest: true };
+  // Otherwise find the last bar on/before the entry date (the ratio in effect then).
+  let chosen = rows[0];
+  for (const r of rows) { if (r.t <= target) chosen = r; else break; }
+  return { ratio: chosen.ratio, exact: true };
+}
+
+/* ===================== SEASONALITY ENGINE (v4.12) =====================
+   Computes a backward-looking calendar bias for a symbol:
+     - Monthly: across all years of history, in THIS calendar month, how often
+       did the symbol close higher month-over-month, and by how much?
+     - Weekly:  across all years, in THIS ISO week-of-year, how often was the
+       week up, and by how much?
+   HONEST FRAMING: this is a base rate, not a forecast. With ~one sample per
+   year, an apparent edge can be noise, and seasonal patterns decay once known.
+   It is CONTEXT / a tiebreaker — never a primary reason to act. Low sample
+   counts (n < SEASON_MIN_N) are flagged "weak". Reuses fetchChart + clean.
+
+   Cached per-ticker so the three scan tables don't refetch. Only runs when the
+   "Seasonality columns" checkbox is on (adds 2 deep ~15y fetches per symbol).
+   --------------------------------------------------------------------------- */
+const SEASON_MIN_N = 8;        // below this sample count → flag "weak"
+const SEASON_POS   = 58;       // win rate >= 58% → positive bias
+const SEASON_NEG   = 42;       // win rate <= 42% → negative bias  (else neutral)
+const seasonCache = new Map(); // ticker -> { mo:{...}, wk:{...} } | { error }
+
+function isoWeek(d) {
+  // ISO 8601 week number (1..53).
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7;          // Mon=0..Sun=6
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);     // nearest Thursday
+  const firstThu = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const firstDayNum = (firstThu.getUTCDay() + 6) % 7;
+  firstThu.setUTCDate(firstThu.getUTCDate() - firstDayNum + 3);
+  return 1 + Math.round((date - firstThu) / (7 * 24 * 3600 * 1000));
+}
+
+// Summarize a list of period returns into {n, winRate, avgRet, bias}.
+function seasonSummarize(rets) {
+  const n = rets.length;
+  if (!n) return { n: 0, winRate: null, avgRet: null, bias: "na" };
+  const wins = rets.filter(r => r > 0).length;
+  const winRate = (wins / n) * 100;
+  const avgRet = rets.reduce((a, b) => a + b, 0) / n;
+  let bias = "neutral";
+  if (winRate >= SEASON_POS) bias = "pos";
+  else if (winRate <= SEASON_NEG) bias = "neg";
+  return { n, winRate, avgRet, bias, weak: n < SEASON_MIN_N };
+}
+
+// Fetch + compute both seasonality windows for a ticker (cached).
+async function getSeasonality(ticker) {
+  if (seasonCache.has(ticker)) return seasonCache.get(ticker);
+  try {
+    // --- Monthly: 25y of monthly bars; group MoM returns by calendar month ---
+    const nowMonth = new Date().getMonth();          // 0..11
+    const nowWeek = isoWeek(new Date());             // 1..53
+    const rM = await fetchChart(ticker, "1mo", "15y");
+    const tsM = rM.timestamp || [];
+    const qM = rM.indicators.quote[0];
+    const adjM = (rM.indicators.adjclose && rM.indicators.adjclose[0] && rM.indicators.adjclose[0].adjclose) || null;
+    const closeM = adjM || qM.close;
+    const moRets = [];
+    for (let i = 1; i < closeM.length; i++) {
+      if (closeM[i] == null || closeM[i - 1] == null || closeM[i - 1] === 0) continue;
+      const d = new Date(tsM[i] * 1000);
+      // Skip the still-forming current month (last bar) to avoid partial-month bias.
+      if (i === closeM.length - 1) continue;
+      if (d.getMonth() === nowMonth) moRets.push((closeM[i] - closeM[i - 1]) / closeM[i - 1] * 100);
+    }
+    const mo = seasonSummarize(moRets);
+
+    // --- Weekly: 25y of weekly bars; group WoW returns by ISO week-of-year ---
+    const rW = await fetchChart(ticker, "1wk", "15y");
+    const tsW = rW.timestamp || [];
+    const qW = rW.indicators.quote[0];
+    const adjW = (rW.indicators.adjclose && rW.indicators.adjclose[0] && rW.indicators.adjclose[0].adjclose) || null;
+    const closeW = adjW || qW.close;
+    const wkRets = [];
+    for (let i = 1; i < closeW.length; i++) {
+      if (closeW[i] == null || closeW[i - 1] == null || closeW[i - 1] === 0) continue;
+      if (i === closeW.length - 1) continue;          // skip forming current week
+      const d = new Date(tsW[i] * 1000);
+      if (isoWeek(d) === nowWeek) wkRets.push((closeW[i] - closeW[i - 1]) / closeW[i - 1] * 100);
+    }
+    const wk = seasonSummarize(wkRets);
+
+    const out = { mo, wk };
+    seasonCache.set(ticker, out);
+    return out;
+  } catch (e) {
+    const out = { error: true };
+    seasonCache.set(ticker, out);
+    return out;
+  }
+}
+
+// Render one seasonality cell (mo or wk window) → <td>.
+function seasonCell(s) {
+  if (!s || s.bias === "na" || s.winRate == null) return '<td class="tfcell mtf-na" title="No seasonal history available for this window">—</td>';
+  const sym = s.bias === "pos" ? "⊕" : s.bias === "neg" ? "⊖" : "◯";
+  const cls = s.bias === "pos" ? "mtf-bull" : s.bias === "neg" ? "mtf-bear" : "mtf-neut";
+  const wk = s.weak ? " *" : "";
+  const tip = `n=${s.n} occurrences · win ${s.winRate.toFixed(0)}% · avg ${s.avgRet >= 0 ? "+" : ""}${s.avgRet.toFixed(1)}%${s.weak ? " · WEAK (small sample)" : ""}`;
+  const dim = s.weak ? ' style="opacity:0.55;"' : "";
+  return `<td class="tfcell ${cls}"${dim} title="${tip}">${sym} ${s.winRate.toFixed(0)}%${wk}</td>`;
+}
+// The pair of cells a row emits: handles OFF (feature disabled), ERROR (fetch
+// failed for this symbol), and OK (render both windows). Never a bare ambiguous "—".
+function seasonCells(season) {
+  if (!seasonOn()) {
+    const off = '<td class="tfcell mtf-na" title="Enable the “Seasonality columns” checkbox, then re-run the scan">off</td>';
+    return off + off;
+  }
+  if (!season || season.error) {
+    const err = '<td class="tfcell mtf-na" title="Seasonal history fetch failed for this symbol (newer listing or data gap)">n/a</td>';
+    return err + err;
+  }
+  return seasonCell(season.mo) + seasonCell(season.wk);
+}
+
+// Whether seasonality columns are enabled.
+function seasonOn() {
+  const el = document.getElementById("seasonChk");
+  return !!(el && el.checked);
+}
+/* =================== END SEASONALITY ENGINE ==================== */
 
 function analyze(result, maxPrice, minAtr, lookback, minVol, mode, timeframe, zoneMin, zoneMax, zoneMA, require820, requireOB, obRunParam, obThresholdParam, requireOBat20, require820bear, requireOBbear, requireOBat20bear) {
   const q = result.indicators.quote[0];
@@ -1418,6 +1712,10 @@ async function runScan() {
   document.getElementById("dfTable").style.display = "none";
   document.getElementById("dfControls").style.display = "none";
   document.getElementById("dfChecklist").style.display = "none";
+  document.getElementById("ccTable").style.display = "none";
+  document.getElementById("ccControls").style.display = "none";
+  document.getElementById("coilTable").style.display = "none";
+  document.getElementById("coilControls").style.display = "none";
   scanResults = [];
   const listName = (document.getElementById("listPicker").value || "").trim();
   scanMeta = { timeframe, mode, unit, tfLabel, debugOn, zMin, zMax, zoneMA, listName, tickerCount: tickers.length };
@@ -1762,7 +2060,7 @@ function mtfBias(result, timeframe) {
     const n = C.length;
     if (n < 51) return { bias: null, price: n ? C[n - 1] : null };
     // Exclude the partial forming bar on intraday/weekly, exactly like analyze().
-    const partialLast = (timeframe === "1wk" || timeframe === "60m" || timeframe === "30m" || timeframe === "5m");
+    const partialLast = (timeframe === "1mo" || timeframe === "1wk" || timeframe === "60m" || timeframe === "30m" || timeframe === "5m");
     const last = partialLast ? n - 2 : n - 1;
     const meta = result.meta || {};
     const livePrice = (typeof meta.regularMarketPrice === "number") ? meta.regularMarketPrice : null;
@@ -1812,6 +2110,10 @@ async function runMTF() {
   document.getElementById("dfTable").style.display = "none";
   document.getElementById("dfControls").style.display = "none";
   document.getElementById("dfChecklist").style.display = "none";
+  document.getElementById("ccTable").style.display = "none";
+  document.getElementById("ccControls").style.display = "none";
+  document.getElementById("coilTable").style.display = "none";
+  document.getElementById("coilControls").style.display = "none";
   table.style.display = "table";
   ctrls.style.display = "block";
   document.getElementById("mtfBody").innerHTML = "";
@@ -1838,7 +2140,9 @@ async function runMTF() {
     }
     const v = mtfVerdict(biases);
     if (anyErr && v.known === 0) failed++;
-    mtfResults.push({ t, price, biases, score: v.score, verdict: v.verdict, bull: v.bull, bear: v.bear, known: v.known, error: anyErr });
+    let season = null;
+    if (seasonOn()) { status.textContent = `MTF scanning ${t} · seasonality …`; season = await getSeasonality(t); }
+    mtfResults.push({ t, price, biases, score: v.score, verdict: v.verdict, bull: v.bull, bear: v.bear, known: v.known, season, error: anyErr });
     done++;
     renderMTF();
   }
@@ -1904,11 +2208,12 @@ function renderMTF() {
       `<td>${r.price == null ? "—" : "$" + r.price.toFixed(2)}</td>` +
       cells +
       `<td><b>${scoreStr}</b></td>` +
-      `<td>${verdictTag(r.verdict)}</td>`;
+      `<td>${verdictTag(r.verdict)}</td>` +
+      seasonCells(r.season);
     body.appendChild(tr);
   }
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--muted); padding:14px;">No symbols match this filter.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--muted); padding:14px;">No symbols match this filter.</td></tr>`;
   }
 }
 
@@ -1987,6 +2292,738 @@ document.getElementById("mtfUncheckShown").addEventListener("click", () => {
   listMsg(`Removed ${shown.length} shown symbol${shown.length === 1 ? "" : "s"} from candidates.`);
 });
 /* =================== END MTF AGREEMENT SCAN ==================== */
+
+/* ===================== COVERED-CALL CANDIDATES (v4.10) =====================
+   Goal: surface underlyings that are good for SELLING COVERED CALLS for income —
+   i.e. names drifting SIDEWAYS or MILDLY UP (so you keep the premium and aren't
+   constantly called away or watching the stock crater). Reads three timeframes:
+     Monthly = is this a CC-friendly regime at all (not a monthly downtrend)?
+     Weekly  = the income cadence / entry timing.
+     Daily   = near-term confirmation.
+   Plus calm-but-not-dead ATR% (enough premium, not gap-prone) and liquidity.
+   It scores the UNDERLYING only — it cannot see the option chain. Strike/premium
+   selection happens in the broker. Reuses fetchChart, clean, sma, atr14.
+   ------------------------------------------------------------------------------ */
+
+// Timeframes this module reads (independent of the 4-TF MTF agreement grid).
+const CC_TFS = [
+  { tf: "1mo", label: "Monthly", key: "1mo" },
+  { tf: "1wk", label: "Weekly",  key: "1wk" },
+  { tf: "1d",  label: "Daily",   key: "1d"  },
+];
+
+/* Weekly-options-eligible universe (maintained list).
+   --------------------------------------------------------------------------
+   EDIT THIS to keep current with the Cboe weeklys list. These are large, liquid
+   names that offer WEEKLY expirations — the prime hunting ground for an income
+   covered-call cadence. Anything not on this list is tagged "Mo" (monthly only)
+   but still scored and shown. Source to refresh: Cboe "Available Weeklys".  */
+const CC_WEEKLYS = new Set([
+  // Mega-cap tech / index proxies
+  "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","TSLA","AVGO","AMD","NFLX",
+  "SPY","QQQ","IWM","DIA","QQQM","VOO",
+  // Blue-chip dividend / income-friendly
+  "JPM","BAC","WFC","KO","PEP","PG","JNJ","PFE","MRK","ABBV","CVX","XOM","WMT",
+  "HD","MCD","DIS","VZ","T","CSCO","INTC","ORCL","IBM","QCOM","TXN","CAT","BA",
+  "GE","F","GM","NKE","SBUX","COST","UNH","V","MA","PYPL","CRM","ADBE",
+  // ETFs commonly written against
+  "XLF","XLE","XLK","SMH","GDX","SLV","GLD","TLT","HYG","ARKK","DIVO","JEPI","JEPQ",
+  "SCHD","DGRO","O"
+]);
+
+let ccResults = [];   // [{ t, price, biases:{1mo,1wk,1d}, atrPct, liq, score, regime, weekly, error }]
+
+// Classify the CC regime. ELIGIBILITY GATE (v4.10.1): all three timeframes must
+// be positively STACKED / in gear — price > 20MA > 50MA — exactly the "bullish"
+// condition mtfBias computes. If any of Monthly / Weekly / Daily is not bullish,
+// the name does NOT qualify for a covered call. Survivors are then sub-classified
+// by monthly 20MA slope.
+// Returns: "ingear_flat", "mildup", "notgear", "hot", "incomplete".
+//   ingear_flat : all 3 stacked, monthly slope shallow → trend intact, drifting   → BEST premium retention
+//   mildup      : all 3 stacked, monthly slope positive but capped (not parabolic) → premium + slight appreciation
+//   notgear     : at least one TF not stacked bullish (incl. any bearish)          → not eligible
+//   hot         : in gear but ATR% too high OR monthly slope runaway (upside capped away) → excluded
+//   incomplete  : not enough data on one or more TFs
+function ccClassify(biases, monthlySlopePct, atrPct) {
+  const m = biases["1mo"], w = biases["1wk"], d = biases["1d"];
+  if (m == null || w == null || d == null) return "incomplete";
+  // GATE: every timeframe must be positively stacked (price>20>50). Anything
+  // less than full alignment across Daily/Weekly/Monthly is not a candidate.
+  if (!(m === "bullish" && w === "bullish" && d === "bullish")) return "notgear";
+  // In gear, but too volatile to be a calm income name (gap / frequent assignment).
+  if (atrPct != null && atrPct > CC_ATR_HOT) return "hot";
+  // In gear, but monthly slope is parabolic → a covered call would cap away real upside.
+  if (monthlySlopePct > CC_SLOPE_MILD) return "hot";
+  // In gear with a shallow monthly slope → trend intact and drifting (ideal).
+  if (monthlySlopePct <= CC_SLOPE_FLAT) return "ingear_flat";
+  // In gear, gently rising (slope between flat and the runaway cap).
+  return "mildup";
+}
+
+// Tunable thresholds (percent terms).
+const CC_ATR_HOT    = 6.0;   // daily ATR > 6% of price → too hot for calm income
+const CC_ATR_DEAD   = 0.6;   // daily ATR < 0.6% → too little premium to bother
+const CC_ATR_SWEET  = 2.2;   // ideal-ish daily ATR% (peak of the reward curve)
+const CC_SLOPE_FLAT = 1.5;   // |monthly 20MA slope| <= 1.5% over lookback → "flat"
+const CC_SLOPE_MILD = 6.0;   // monthly 20MA slope <= 6% → "mildly up"; above → runaway
+
+// Per-timeframe read for the CC module: trend bias (via mtfBias logic) plus,
+// for monthly, the slope of the 20-bar MA (rise over the last ~6 bars, % terms),
+// and for daily, ATR% of price and a liquidity proxy (avg dollar-volume tier).
+function ccReadMonthly(result) {
+  try {
+    const q = result.indicators.quote[0];
+    const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+    const { A } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+    const n = A.length;
+    if (n < 27) return { slopePct: null };           // need 20MA + ~6 bars back
+    const last = n - 2;                               // drop still-forming monthly bar
+    const maNow = sma(A, 20, last);
+    const maPrev = sma(A, 20, last - 6);              // ~6 months earlier
+    if (maNow == null || maPrev == null || maPrev === 0) return { slopePct: null };
+    return { slopePct: ((maNow - maPrev) / maPrev) * 100 };
+  } catch (e) { return { slopePct: null }; }
+}
+
+function ccReadDaily(result) {
+  try {
+    const q = result.indicators.quote[0];
+    const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+    const { H, L, C, V } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+    const n = C.length;
+    if (n < 15) return { atrPct: null, liq: null };
+    const atr = atr14(H, L, C);
+    const px = C[n - 1];
+    const atrPct = (atr != null && px) ? (atr / px) * 100 : null;
+    // Liquidity proxy: average dollar volume over last ~20 bars, bucketed.
+    let dv = 0, cnt = 0;
+    for (let i = Math.max(0, n - 20); i < n; i++) { if (V[i] && C[i]) { dv += V[i] * C[i]; cnt++; } }
+    const avgDV = cnt ? dv / cnt : 0;
+    // Tier: 3 = >$200M/day, 2 = >$50M, 1 = >$10M, 0 = thin.
+    const liq = avgDV > 200e6 ? 3 : avgDV > 50e6 ? 2 : avgDV > 10e6 ? 1 : 0;
+    return { atrPct, liq, avgDV };
+  } catch (e) { return { atrPct: null, liq: null }; }
+}
+
+// Score a candidate 0–100. Higher = better covered-call income setup.
+//   Regime (40):  in-gear flat 40, mildup 34, else 0 (notgear/hot/incomplete excluded)
+//   ATR%  (30):   tent function — peaks near CC_ATR_SWEET, 0 at dead/hot extremes
+//   Liquidity(20):tier 3→20, 2→14, 1→7, 0→0
+//   Weeklys (10): +10 if weekly-eligible (income cadence), else +0
+function ccScore(regime, atrPct, liq, weekly) {
+  if (regime !== "ingear_flat" && regime !== "mildup") return 0;
+  let s = 0;
+  s += (regime === "ingear_flat") ? 40 : 34;
+  // ATR tent: 0 below DEAD, rises to 30 at SWEET, falls back to 0 at HOT.
+  if (atrPct != null) {
+    if (atrPct <= CC_ATR_DEAD || atrPct >= CC_ATR_HOT) s += 0;
+    else if (atrPct <= CC_ATR_SWEET) s += 30 * ((atrPct - CC_ATR_DEAD) / (CC_ATR_SWEET - CC_ATR_DEAD));
+    else s += 30 * ((CC_ATR_HOT - atrPct) / (CC_ATR_HOT - CC_ATR_SWEET));
+  }
+  s += liq === 3 ? 20 : liq === 2 ? 14 : liq === 1 ? 7 : 0;
+  s += weekly ? 10 : 0;
+  return Math.round(s);
+}
+
+async function runCC() {
+  const btn = document.getElementById("ccBtn");
+  const status = document.getElementById("status");
+  const table = document.getElementById("ccTable");
+  const ctrls = document.getElementById("ccControls");
+
+  const raw = document.getElementById("tickers").value;
+  const tickers = [...new Set(raw.toUpperCase().split(/[\s,]+/).filter(Boolean))];
+  if (!tickers.length) { status.textContent = "Add at least one ticker."; return; }
+
+  btn.disabled = true;
+  // Hide every other view so only the CC table shows.
+  document.getElementById("results").style.display = "none";
+  document.getElementById("mtfTable").style.display = "none";
+  document.getElementById("mtfControls").style.display = "none";
+  document.getElementById("dfTable").style.display = "none";
+  document.getElementById("dfControls").style.display = "none";
+  document.getElementById("dfChecklist").style.display = "none";
+  document.getElementById("ccTable").style.display = "none";
+  document.getElementById("ccControls").style.display = "none";
+  document.getElementById("coilTable").style.display = "none";
+  document.getElementById("coilControls").style.display = "none";
+  table.style.display = "table";
+  ctrls.style.display = "block";
+  document.getElementById("ccBody").innerHTML = "";
+  ccResults = [];
+  let done = 0, failed = 0;
+
+  for (const t of tickers) {
+    const biases = {};
+    let price = null, anyErr = false, monthlySlope = null, atrPct = null, liq = null;
+    for (const { tf } of CC_TFS) {
+      status.textContent = `Covered-Call scan ${t} · ${tf} … (${done}/${tickers.length})`;
+      try {
+        const result = await fetchChart(t, tf);
+        const r = mtfBias(result, tf);
+        biases[tf] = r.bias;
+        if (r.price != null) price = r.price;
+        if (tf === "1mo") monthlySlope = ccReadMonthly(result).slopePct;
+        if (tf === "1d")  { const d = ccReadDaily(result); atrPct = d.atrPct; liq = d.liq; }
+      } catch (e) {
+        biases[tf] = null; anyErr = true;
+      }
+    }
+    const regime = ccClassify(biases, monthlySlope == null ? 0 : monthlySlope, atrPct);
+    const weekly = CC_WEEKLYS.has(t);
+    const score = ccScore(regime, atrPct, liq, weekly);
+    if (Object.values(biases).every(v => v == null)) failed++;
+    let season = null;
+    if (seasonOn()) { status.textContent = `Covered-Call scan ${t} · seasonality …`; season = await getSeasonality(t); }
+    ccResults.push({ t, price, biases, monthlySlope, atrPct, liq, regime, weekly, score, season, error: anyErr });
+    done++;
+    renderCC();
+  }
+
+  const elig = ccResults.filter(r => r.regime === "ingear_flat" || r.regime === "mildup").length;
+  const flat = ccResults.filter(r => r.regime === "ingear_flat").length;
+  const mild = ccResults.filter(r => r.regime === "mildup").length;
+  status.innerHTML = `Covered-Call scan done — ${done} tickers across Monthly/Weekly/Daily. ` +
+    `<b style="color:#B8762A">${elig} in gear &amp; eligible</b> (${flat} flat, ${mild} mildly-up).` +
+    (failed ? ` <b style="color:var(--red)">${failed} failed all TFs.</b>` : "") +
+    ` <span style="color:var(--muted)">Confirm premium &amp; strike in your broker's chain.</span>`;
+  btn.disabled = false;
+}
+
+function ccRegimeTag(regime) {
+  switch (regime) {
+    case "ingear_flat": return '<span class="verdict v-fullbull">⚙ IN GEAR · flat</span>';
+    case "mildup":      return '<span class="verdict v-fullbull">↗ IN GEAR · mild up</span>';
+    case "notgear":     return '<span class="verdict v-mixed">not in gear</span>';
+    case "hot":         return '<span class="verdict v-mixed" style="background:#f4dada; color:#8f2525;">⚡ too hot</span>';
+    default:            return '<span class="verdict v-mixed">incomplete</span>';
+  }
+}
+
+function ccPassesFilter(r, f) {
+  switch (f) {
+    case "candidates": return r.regime === "ingear_flat" || r.regime === "mildup";
+    case "sideways":   return r.regime === "ingear_flat";
+    case "mildup":     return r.regime === "mildup";
+    case "weekly":     return r.weekly && (r.regime === "ingear_flat" || r.regime === "mildup");
+    case "excluded":   return r.regime === "notgear" || r.regime === "hot";
+    default: return true;
+  }
+}
+
+function renderCC() {
+  const body = document.getElementById("ccBody");
+  const f = document.getElementById("ccFilter").value;
+  const rows = ccResults
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (b.r.score - a.r.score) || (a.i - b.i))
+    .map(x => x.r)
+    .filter(r => ccPassesFilter(r, f));
+  body.innerHTML = "";
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    const cells = CC_TFS.map(({ tf }) =>
+      `<td class="tfcell ${mtfCellClass(r.biases[tf])}">${mtfCellText(r.biases[tf])}</td>`).join("");
+    const picked = candidates.has(r.t);
+    const pickCell = `<td style="text-align:center;"><input type="checkbox" class="pickbox" data-ticker="${r.t}" ${picked ? "checked" : ""} style="width:auto; cursor:pointer;"></td>`;
+    const optTag = r.weekly
+      ? '<span style="background:#e7d3b6; color:#7a4e16; padding:1px 6px; border-radius:3px; font-size:11px; font-weight:bold;">Wk</span>'
+      : '<span style="background:#e2e2e2; color:#555; padding:1px 6px; border-radius:3px; font-size:11px; font-weight:bold;">Mo</span>';
+    const atrStr = r.atrPct == null ? "—" : r.atrPct.toFixed(1) + "%";
+    tr.innerHTML =
+      pickCell +
+      `<td><b>${r.t}</b></td>` +
+      `<td style="text-align:center;">${optTag}</td>` +
+      `<td>${r.price == null ? "—" : "$" + r.price.toFixed(2)}</td>` +
+      cells +
+      `<td>${atrStr}</td>` +
+      `<td><b>${r.score}</b></td>` +
+      `<td>${ccRegimeTag(r.regime)}</td>` +
+      seasonCells(r.season);
+    body.appendChild(tr);
+  }
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--muted); padding:14px;">No symbols match this filter.</td></tr>`;
+  }
+}
+
+function ccShownTickers() {
+  return Array.from(document.querySelectorAll("#ccBody .pickbox")).map(b => b.dataset.ticker);
+}
+
+function exportCCcsv() {
+  if (!ccResults.length) { document.getElementById("status").textContent = "Run a Covered-Call scan first."; return; }
+  const head = ["Ticker", "Options", "Price", "Monthly", "Weekly", "Daily", "ATR%", "Score", "Regime", "MonthlySlope%"];
+  const lines = [head.join(",")];
+  ccResults
+    .slice()
+    .sort((a, b) => b.score - a.score)
+    .forEach(r => {
+      lines.push([
+        r.t,
+        r.weekly ? "weekly" : "monthly",
+        r.price == null ? "" : r.price.toFixed(2),
+        r.biases["1mo"] || "na", r.biases["1wk"] || "na", r.biases["1d"] || "na",
+        r.atrPct == null ? "" : r.atrPct.toFixed(2),
+        r.score,
+        r.regime,
+        r.monthlySlope == null ? "" : r.monthlySlope.toFixed(2)
+      ].join(","));
+    });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url; a.download = `CoveredCall_candidates_${stamp}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("ccBtn").addEventListener("click", runCC);
+document.getElementById("ccLoadWeeklys").addEventListener("click", () => {
+  const syms = Array.from(CC_WEEKLYS).sort();
+  const box = document.getElementById("tickers");
+  const existing = box.value.trim();
+  // If the box already holds exactly the weeklys list, treat a second click as append-free no-op.
+  box.value = syms.join(", ");
+  const status = document.getElementById("status");
+  if (status) status.innerHTML = `Loaded <b>${syms.length}</b> weekly-options names into the ticker box. ` +
+    `<span style="color:var(--muted)">Edit the box freely, then click <b>Covered-Call Scan</b>. (Curate the list via CC_WEEKLYS in the code.)</span>`;
+  box.focus();
+});
+document.getElementById("ccFilter").addEventListener("change", renderCC);
+document.getElementById("ccCsvBtn").addEventListener("click", exportCCcsv);
+document.getElementById("ccBody").addEventListener("change", (e) => {
+  const box = e.target.closest(".pickbox");
+  if (!box) return;
+  const t = box.dataset.ticker;
+  if (box.checked) candidates.add(t); else candidates.delete(t);
+  persistCandidates(); updateCandCount();
+});
+document.getElementById("ccCheckShown").addEventListener("click", () => {
+  const shown = ccShownTickers();
+  if (!shown.length) return;
+  shown.forEach(t => candidates.add(t));
+  document.querySelectorAll("#ccBody .pickbox").forEach(b => { b.checked = true; });
+  persistCandidates(); updateCandCount();
+  listMsg(`Added ${shown.length} shown symbol${shown.length === 1 ? "" : "s"} to candidates.`);
+});
+document.getElementById("ccCheckTop").addEventListener("click", () => {
+  const elig = ccResults.filter(r => r.regime === "ingear_flat" || r.regime === "mildup").map(r => r.t);
+  if (!elig.length) return;
+  elig.forEach(t => candidates.add(t));
+  document.querySelectorAll("#ccBody .pickbox").forEach(b => { if (elig.includes(b.dataset.ticker)) b.checked = true; });
+  persistCandidates(); updateCandCount();
+  listMsg(`Added ${elig.length} CC-eligible symbol${elig.length === 1 ? "" : "s"} to candidates.`);
+});
+document.getElementById("ccUncheckShown").addEventListener("click", () => {
+  const shown = ccShownTickers();
+  if (!shown.length) return;
+  shown.forEach(t => candidates.delete(t));
+  document.querySelectorAll("#ccBody .pickbox").forEach(b => { b.checked = false; });
+  persistCandidates(); updateCandCount();
+  listMsg(`Removed ${shown.length} shown symbol${shown.length === 1 ? "" : "s"} from candidates.`);
+});
+/* =================== END COVERED-CALL CANDIDATES ==================== */
+
+/* ===================== COILED / PRE-BREAKOUT (v4.11) =====================
+   Finds names in a tight COIL — the quiet, compressed state that precedes a
+   disproportionate share of explosive moves — BEFORE the trigger fires.
+   Honest framing: this is NOT a predictor. It measures the coiled CONDITION
+   from price/volume only. It cannot see the catalyst, options flow, short
+   interest, or float that actually release the spring. A coil can sit, deflate,
+   or break the "wrong" way. Direction is undecided; the lean tag is pressure,
+   not a forecast.
+
+   Gate (tight & selective) — ALL must hold on a timeframe to count as "coiled":
+     1. Volatility contraction: current ATR% near a multi-month LOW
+        (ATR% <= COIL_ATR_PCTILE of its own recent range).
+     2. Volume dry-up: recent avg volume < longer avg volume (sellers exhausted).
+     3. Range tightening: recent avg true-range shrinking vs. the prior window.
+     4. MA pinch: |20MA - 50MA| / price <= COIL_PINCH_MAX (energy loaded).
+   Pre-trigger only: if a volume THRUST is already firing (recent vol >> avg),
+   the spring is releasing, not coiling → excluded from "coiled."
+
+   Lean (where pressure sits, not a prediction):
+     up   : price in upper part of the base AND positive relative strength vs SPY
+     down : price in lower part of the base AND negative relative strength
+     neut : compressed but no clear lean
+   Scored independently on Daily and Weekly; the timeframe is tagged.
+   Reuses fetchChart, clean, sma, atr14.
+   ------------------------------------------------------------------------------ */
+
+// Tight gate thresholds. Lower percentile / smaller pinch = stricter.
+const COIL_ATR_PCTILE = 0.25;   // current ATR% must sit in bottom 25% of its 6mo range
+const COIL_PINCH_MAX  = 2.5;    // |20MA-50MA|/price <= 2.5% = MAs pinched
+const COIL_VOL_THRUST = 1.8;    // recent vol > 1.8x avg = TRIGGER firing → not "coiled"
+const COIL_BASE_HI    = 0.66;   // price in top third of base → up-lean candidate
+const COIL_BASE_LO    = 0.34;   // price in bottom third of base → down-lean candidate
+
+let coilResults = [];      // [{ t, price, daily:{...}, weekly:{...}, score, lean, rsSpy, anyCoiled, error }]
+let coilSpyRet = { d: null, w: null };   // SPY trailing returns for relative strength
+
+// Compute SPY trailing return on a timeframe, for relative-strength comparison.
+async function coilSpyReturn(tf, lookback) {
+  try {
+    const result = await fetchChart("SPY", tf);
+    const q = result.indicators.quote[0];
+    const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+    const { A } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+    const n = A.length;
+    const last = (tf === "1wk") ? n - 2 : n - 1;   // drop forming weekly bar
+    if (last - lookback < 0) return null;
+    return (A[last] - A[last - lookback]) / A[last - lookback] * 100;
+  } catch (e) { return null; }
+}
+
+// Percentile rank of `val` within `arr` (0..1). Lower = val is near the low end.
+function pctileRank(arr, val) {
+  if (!arr.length) return null;
+  let below = 0;
+  for (const x of arr) if (x <= val) below++;
+  return below / arr.length;
+}
+
+// Analyze one timeframe for the coil condition. Returns the per-TF object.
+function coilAnalyzeTF(result, tf, spyRet) {
+  try {
+    const q = result.indicators.quote[0];
+    const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+    const { H, L, C, V, A } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+    const n = C.length;
+    if (n < 60) return { coiled: false, reason: "insufficient", atrPct: null };
+    const last = (tf === "1wk") ? n - 2 : n - 1;   // drop still-forming weekly bar
+    const px = C[last];
+
+    // --- 1. Volatility contraction: ATR% now vs its own recent distribution ---
+    // Build a rolling ATR% series over the recent window and percentile-rank the latest.
+    const WIN = (tf === "1wk") ? 26 : 126;   // ~6 months of bars
+    const atrPctSeries = [];
+    const startI = Math.max(15, last - WIN);
+    for (let i = startI; i <= last; i++) {
+      const atrI = atr14(H.slice(0, i + 1), L.slice(0, i + 1), C.slice(0, i + 1));
+      if (atrI != null && C[i]) atrPctSeries.push((atrI / C[i]) * 100);
+    }
+    const curAtrPct = atrPctSeries.length ? atrPctSeries[atrPctSeries.length - 1] : null;
+    const atrRank = (curAtrPct != null) ? pctileRank(atrPctSeries, curAtrPct) : null;
+    const contracted = (atrRank != null && atrRank <= COIL_ATR_PCTILE);
+
+    // --- 2. Volume dry-up: recent avg vol < longer avg vol ---
+    const recentVol = avgSlice(V, last - 10, last);
+    const longerVol = avgSlice(V, last - 50, last - 10);
+    const volDry = (recentVol != null && longerVol != null && recentVol < longerVol);
+    const volDryRatio = (recentVol != null && longerVol) ? recentVol / longerVol : null;
+
+    // --- pre-trigger guard: is a volume THRUST already firing? ---
+    const lastVol = V[last] || 0;
+    const avg50 = avgSlice(V, last - 50, last) || 1;
+    const thrust = lastVol > avg50 * COIL_VOL_THRUST;
+
+    // --- 3. Range tightening: recent true-range avg < prior window ---
+    const trRecent = avgTrueRange(H, L, C, last - 10, last);
+    const trPrior  = avgTrueRange(H, L, C, last - 30, last - 10);
+    const rangeTight = (trRecent != null && trPrior != null && trRecent < trPrior);
+
+    // --- 4. MA pinch: 20MA and 50MA close together as % of price ---
+    const ma20 = sma(A, 20, last), ma50 = sma(A, 50, last);
+    const pinchPct = (ma20 != null && ma50 != null && px) ? Math.abs(ma20 - ma50) / px * 100 : null;
+    const pinched = (pinchPct != null && pinchPct <= COIL_PINCH_MAX);
+
+    // --- base position (where price sits in its recent range) for the lean ---
+    const baseHi = maxSlice(H, last - WIN, last);
+    const baseLo = minSlice(L, last - WIN, last);
+    const basePos = (baseHi != null && baseLo != null && baseHi > baseLo)
+      ? (px - baseLo) / (baseHi - baseLo) : null;
+
+    // --- relative strength vs SPY on this timeframe ---
+    const lookback = (tf === "1wk") ? 13 : 63;   // ~3 months
+    const myRet = (last - lookback >= 0) ? (A[last] - A[last - lookback]) / A[last - lookback] * 100 : null;
+    const rs = (myRet != null && spyRet != null) ? myRet - spyRet : null;
+
+    // COILED = all four gates pass AND no thrust (still pre-trigger).
+    const coiled = contracted && volDry && rangeTight && pinched && !thrust;
+
+    // Lean (pressure direction), only meaningful when coiled.
+    let lean = "neut";
+    if (basePos != null && rs != null) {
+      if (basePos >= COIL_BASE_HI && rs > 0) lean = "up";
+      else if (basePos <= COIL_BASE_LO && rs < 0) lean = "down";
+    }
+
+    return {
+      coiled, thrust, atrPct: curAtrPct, atrRank, contracted,
+      volDry, volDryRatio, rangeTight, pinchPct, pinched,
+      basePos, rs, lean
+    };
+  } catch (e) {
+    return { coiled: false, reason: "error", atrPct: null };
+  }
+}
+
+// Small array helpers (mean / true-range mean / min / max over a slice).
+function avgSlice(arr, a, b) {
+  a = Math.max(0, a); if (b <= a) return null;
+  let s = 0, c = 0;
+  for (let i = a; i < b; i++) { if (arr[i] != null) { s += arr[i]; c++; } }
+  return c ? s / c : null;
+}
+function avgTrueRange(H, L, C, a, b) {
+  a = Math.max(1, a); if (b <= a) return null;
+  let s = 0, c = 0;
+  for (let i = a; i < b; i++) {
+    const tr = Math.max(H[i] - L[i], Math.abs(H[i] - C[i - 1]), Math.abs(L[i] - C[i - 1]));
+    s += tr; c++;
+  }
+  return c ? s / c : null;
+}
+function minSlice(arr, a, b) {
+  a = Math.max(0, a); let m = Infinity;
+  for (let i = a; i <= b && i < arr.length; i++) if (arr[i] != null && arr[i] < m) m = arr[i];
+  return m === Infinity ? null : m;
+}
+function maxSlice(arr, a, b) {
+  a = Math.max(0, a); let m = -Infinity;
+  for (let i = a; i <= b && i < arr.length; i++) if (arr[i] != null && arr[i] > m) m = arr[i];
+  return m === -Infinity ? null : m;
+}
+
+// Score 0–100: how tightly coiled (deeper contraction + dryer volume + tighter
+// pinch = higher). Combines both timeframes; a name coiled on BOTH scores higher.
+function coilScore(daily, weekly) {
+  function tfScore(x) {
+    if (!x || !x.coiled) return 0;
+    let s = 0;
+    // Contraction depth: the lower the ATR percentile, the better (0..40).
+    if (x.atrRank != null) s += 40 * (1 - (x.atrRank / COIL_ATR_PCTILE));
+    // Volume dry-up depth: lower ratio = dryer (0..25).
+    if (x.volDryRatio != null) s += 25 * Math.max(0, Math.min(1, (1 - x.volDryRatio) / 0.5));
+    // MA pinch tightness: tighter = better (0..25).
+    if (x.pinchPct != null) s += 25 * Math.max(0, (COIL_PINCH_MAX - x.pinchPct) / COIL_PINCH_MAX);
+    // Relative strength magnitude bonus (0..10), either direction (pressure).
+    if (x.rs != null) s += 10 * Math.min(1, Math.abs(x.rs) / 15);
+    return s;
+  }
+  const d = tfScore(daily), w = tfScore(weekly);
+  // Weight: take the stronger TF fully, add half the weaker (rewards both-coiled).
+  const hi = Math.max(d, w), lo = Math.min(d, w);
+  return Math.round(Math.min(100, hi + lo * 0.5));
+}
+
+// Net lean across timeframes (pressure direction).
+function coilNetLean(daily, weekly) {
+  const leans = [daily, weekly].filter(x => x && x.coiled).map(x => x.lean);
+  if (!leans.length) return "neut";
+  const up = leans.filter(l => l === "up").length;
+  const down = leans.filter(l => l === "down").length;
+  if (up > down) return "up";
+  if (down > up) return "down";
+  return "neut";
+}
+
+async function runCoil() {
+  const btn = document.getElementById("coilBtn");
+  const status = document.getElementById("status");
+  const table = document.getElementById("coilTable");
+  const ctrls = document.getElementById("coilControls");
+
+  const raw = document.getElementById("tickers").value;
+  const tickers = [...new Set(raw.toUpperCase().split(/[\s,]+/).filter(Boolean))];
+  if (!tickers.length) { status.textContent = "Add at least one ticker."; return; }
+
+  btn.disabled = true;
+  document.getElementById("results").style.display = "none";
+  document.getElementById("mtfTable").style.display = "none";
+  document.getElementById("mtfControls").style.display = "none";
+  document.getElementById("dfTable").style.display = "none";
+  document.getElementById("dfControls").style.display = "none";
+  document.getElementById("dfChecklist").style.display = "none";
+  document.getElementById("ccTable").style.display = "none";
+  document.getElementById("ccControls").style.display = "none";
+  table.style.display = "table";
+  ctrls.style.display = "block";
+  document.getElementById("coilBody").innerHTML = "";
+  coilResults = [];
+  let done = 0, failed = 0;
+
+  // Get SPY benchmark returns once for relative strength.
+  status.textContent = "Coiled scan — fetching SPY benchmark …";
+  coilSpyRet.d = await coilSpyReturn("1d", 63);
+  coilSpyRet.w = await coilSpyReturn("1wk", 13);
+
+  for (const t of tickers) {
+    let price = null, daily = null, weekly = null, anyErr = false;
+    status.textContent = `Coiled scan ${t} · Daily … (${done}/${tickers.length})`;
+    try {
+      const rD = await fetchChart(t, "1d");
+      daily = coilAnalyzeTF(rD, "1d", coilSpyRet.d);
+      const q = rD.indicators.quote[0]; const c = q.close;
+      const meta = rD.meta || {};
+      price = (typeof meta.regularMarketPrice === "number") ? meta.regularMarketPrice : c[c.length - 1];
+    } catch (e) { anyErr = true; }
+    status.textContent = `Coiled scan ${t} · Weekly … (${done}/${tickers.length})`;
+    try {
+      const rW = await fetchChart(t, "1wk");
+      weekly = coilAnalyzeTF(rW, "1wk", coilSpyRet.w);
+    } catch (e) { anyErr = true; }
+
+    const score = coilScore(daily, weekly);
+    const lean = coilNetLean(daily, weekly);
+    const anyCoiled = !!((daily && daily.coiled) || (weekly && weekly.coiled));
+    const bothCoiled = !!(daily && daily.coiled && weekly && weekly.coiled);
+    const rsSpy = (daily && daily.rs != null) ? daily.rs : (weekly ? weekly.rs : null);
+    if (!daily && !weekly) failed++;
+    let season = null;
+    if (seasonOn()) { status.textContent = `Coiled scan ${t} · seasonality …`; season = await getSeasonality(t); }
+    coilResults.push({ t, price, daily, weekly, score, lean, anyCoiled, bothCoiled, rsSpy, season, error: anyErr });
+    done++;
+    renderCoil();
+  }
+
+  const coiled = coilResults.filter(r => r.anyCoiled).length;
+  const both = coilResults.filter(r => r.bothCoiled).length;
+  const up = coilResults.filter(r => r.anyCoiled && r.lean === "up").length;
+  const down = coilResults.filter(r => r.anyCoiled && r.lean === "down").length;
+  status.innerHTML = `Coiled scan done — ${done} tickers on Daily &amp; Weekly. ` +
+    `<b style="color:#7A3FA0">${coiled} coiled</b> (${both} on both TFs · ${up} up-lean · ${down} down-lean).` +
+    (failed ? ` <b style="color:var(--red)">${failed} failed.</b>` : "") +
+    ` <span style="color:var(--muted)">Coil = setup, not signal. Check catalyst &amp; options flow before acting.</span>`;
+  btn.disabled = false;
+}
+
+function coilTfCell(x) {
+  if (!x) return '<td class="tfcell mtf-na">—</td>';
+  if (x.coiled) return '<td class="tfcell mtf-bull" style="background:#e9def5; color:#5a2d86;">COIL</td>';
+  if (x.thrust) return '<td class="tfcell mtf-neut">trig</td>';
+  return '<td class="tfcell mtf-na">—</td>';
+}
+function coilLeanTag(lean) {
+  switch (lean) {
+    case "up":   return '<span class="verdict v-fullbull">↑ up-lean</span>';
+    case "down": return '<span class="verdict v-fullbear">↓ down-lean</span>';
+    default:     return '<span class="verdict v-mixed">↔ undecided</span>';
+  }
+}
+function coilPassesFilter(r, f) {
+  switch (f) {
+    case "coiled":    return r.anyCoiled;
+    case "up":        return r.anyCoiled && r.lean === "up";
+    case "down":      return r.anyCoiled && r.lean === "down";
+    case "daily":     return r.daily && r.daily.coiled;
+    case "weekly":    return r.weekly && r.weekly.coiled;
+    case "both":      return r.bothCoiled;
+    case "notcoiled": return !r.anyCoiled;
+    default: return true;
+  }
+}
+
+function renderCoil() {
+  const body = document.getElementById("coilBody");
+  const f = document.getElementById("coilFilter").value;
+  const rows = coilResults
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (b.r.score - a.r.score) || (a.i - b.i))
+    .map(x => x.r)
+    .filter(r => coilPassesFilter(r, f));
+  body.innerHTML = "";
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    const picked = candidates.has(r.t);
+    const pickCell = `<td style="text-align:center;"><input type="checkbox" class="pickbox" data-ticker="${r.t}" ${picked ? "checked" : ""} style="width:auto; cursor:pointer;"></td>`;
+    const atrD = (r.daily && r.daily.atrPct != null) ? r.daily.atrPct.toFixed(1) + "%" : "—";
+    const volDry = (r.daily && r.daily.volDryRatio != null) ? (r.daily.volDryRatio).toFixed(2) + "×" : "—";
+    const pinch = (r.daily && r.daily.pinchPct != null) ? r.daily.pinchPct.toFixed(1) + "%" : "—";
+    const rs = (r.rsSpy != null) ? (r.rsSpy > 0 ? "+" : "") + r.rsSpy.toFixed(1) + "%" : "—";
+    const rsColor = (r.rsSpy != null) ? (r.rsSpy > 0 ? "var(--green)" : r.rsSpy < 0 ? "var(--red)" : "var(--muted)") : "var(--muted)";
+    tr.innerHTML =
+      pickCell +
+      `<td><b>${r.t}</b></td>` +
+      `<td>${r.price == null ? "—" : "$" + r.price.toFixed(2)}</td>` +
+      `<td><b>${r.score}</b></td>` +
+      coilTfCell(r.daily) +
+      coilTfCell(r.weekly) +
+      `<td>${atrD}</td>` +
+      `<td>${volDry}</td>` +
+      `<td>${pinch}</td>` +
+      `<td>${coilLeanTag(r.lean)}</td>` +
+      `<td style="color:${rsColor};">${rs}</td>` +
+      seasonCells(r.season);
+    body.appendChild(tr);
+  }
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="13" style="text-align:center; color:var(--muted); padding:14px;">No symbols match this filter.</td></tr>`;
+  }
+}
+
+function coilShownTickers() {
+  return Array.from(document.querySelectorAll("#coilBody .pickbox")).map(b => b.dataset.ticker);
+}
+
+function exportCoilCsv() {
+  if (!coilResults.length) { document.getElementById("status").textContent = "Run a Coiled scan first."; return; }
+  const head = ["Ticker", "Price", "CoilScore", "DailyCoiled", "WeeklyCoiled", "ATR%_D", "ATRrank_D", "VolDryRatio_D", "MApinch%_D", "Lean", "RSvsSPY%"];
+  const lines = [head.join(",")];
+  coilResults
+    .slice()
+    .sort((a, b) => b.score - a.score)
+    .forEach(r => {
+      lines.push([
+        r.t,
+        r.price == null ? "" : r.price.toFixed(2),
+        r.score,
+        r.daily && r.daily.coiled ? "yes" : "no",
+        r.weekly && r.weekly.coiled ? "yes" : "no",
+        r.daily && r.daily.atrPct != null ? r.daily.atrPct.toFixed(2) : "",
+        r.daily && r.daily.atrRank != null ? r.daily.atrRank.toFixed(3) : "",
+        r.daily && r.daily.volDryRatio != null ? r.daily.volDryRatio.toFixed(3) : "",
+        r.daily && r.daily.pinchPct != null ? r.daily.pinchPct.toFixed(2) : "",
+        r.lean,
+        r.rsSpy != null ? r.rsSpy.toFixed(2) : ""
+      ].join(","));
+    });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url; a.download = `Coiled_prebreakout_${stamp}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("coilBtn").addEventListener("click", runCoil);
+document.getElementById("coilFilter").addEventListener("change", renderCoil);
+document.getElementById("coilCsvBtn").addEventListener("click", exportCoilCsv);
+document.getElementById("coilBody").addEventListener("change", (e) => {
+  const box = e.target.closest(".pickbox");
+  if (!box) return;
+  const t = box.dataset.ticker;
+  if (box.checked) candidates.add(t); else candidates.delete(t);
+  persistCandidates(); updateCandCount();
+});
+document.getElementById("coilCheckShown").addEventListener("click", () => {
+  const shown = coilShownTickers();
+  if (!shown.length) return;
+  shown.forEach(t => candidates.add(t));
+  document.querySelectorAll("#coilBody .pickbox").forEach(b => { b.checked = true; });
+  persistCandidates(); updateCandCount();
+  listMsg(`Added ${shown.length} shown symbol${shown.length === 1 ? "" : "s"} to candidates.`);
+});
+document.getElementById("coilCheckCoiled").addEventListener("click", () => {
+  const c = coilResults.filter(r => r.anyCoiled).map(r => r.t);
+  if (!c.length) return;
+  c.forEach(t => candidates.add(t));
+  document.querySelectorAll("#coilBody .pickbox").forEach(b => { if (c.includes(b.dataset.ticker)) b.checked = true; });
+  persistCandidates(); updateCandCount();
+  listMsg(`Added ${c.length} coiled symbol${c.length === 1 ? "" : "s"} to candidates.`);
+});
+document.getElementById("coilUncheckShown").addEventListener("click", () => {
+  const shown = coilShownTickers();
+  if (!shown.length) return;
+  shown.forEach(t => candidates.delete(t));
+  document.querySelectorAll("#coilBody .pickbox").forEach(b => { b.checked = false; });
+  persistCandidates(); updateCandCount();
+  listMsg(`Removed ${shown.length} shown symbol${shown.length === 1 ? "" : "s"} from candidates.`);
+});
+/* =================== END COILED / PRE-BREAKOUT ==================== */
 
 /* ============== DECISION FRIDAY — WEEKLY 20-MA CIRCUIT BREAKER (v4.6) ==============
    Implements the playbook rule: two consecutive WEEKLY closes below the 20-week
@@ -2126,6 +3163,10 @@ async function runDF() {
   document.getElementById("mtfTable").style.display = "none";
   document.getElementById("mtfControls").style.display = "none";
   document.getElementById("dfChecklist").style.display = "none";
+  document.getElementById("ccTable").style.display = "none";
+  document.getElementById("ccControls").style.display = "none";
+  document.getElementById("coilTable").style.display = "none";
+  document.getElementById("coilControls").style.display = "none";
 
   const raw = document.getElementById("tickers").value;
   const tickers = [...new Set(raw.toUpperCase().split(/[\s,]+/).filter(Boolean))];
@@ -2462,6 +3503,293 @@ document.getElementById("dfChecklistBtn").addEventListener("click", openChecklis
 document.getElementById("dfclRefresh").addEventListener("click", () => { fillChecklist(); });
 document.getElementById("dfclPrint").addEventListener("click", () => { window.print(); });
 /* ============== END DECISION FRIDAY ============== */
+
+/* ============== ATR CALCULATOR ============== */
+// Compute the 20-period MA (on close) and Wilder ATR(14) from a fetched chart result.
+// Returns { ma20, atr, price } or null if insufficient data.
+function atrStopInputs(result, timeframe) {
+  const q = result.indicators.quote[0];
+  const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+  const { H, L, C, A } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+  if (C.length < 21) return null;
+  // Match the scanner exactly: 20MA on ADJUSTED close (matches charts with dividend
+  // adjustment on), and drop the still-forming bar for weekly/intraday timeframes
+  // (daily keeps its live last bar, like the scanner and charting platforms).
+  const partialLast = (timeframe === "1wk" || timeframe === "60m" || timeframe === "30m" || timeframe === "5m");
+  const n = C.length;
+  const endIdx = partialLast ? n - 2 : n - 1;
+  const ma20 = sma(A, 20, endIdx);
+  const atr = atr14(H, L, C);
+  if (ma20 == null || atr == null) return null;
+  const meta = result.meta || {};
+  const price = (typeof meta.regularMarketPrice === "number") ? meta.regularMarketPrice : C[n - 1];
+  return { ma20, atr, price };
+}
+
+// Tiered trailing-stop ladder per timeframe (O'Neil-style):
+//   Rung 1: initial stop = entry − initPct
+//   Rung 2: once up >= breakevenPct, stop = entry (breakeven)
+//   Rung 3: once up >= breakevenPct AND trailing above breakeven, stop = peak − trailPct
+// Trail uses peak-since-entry (high-water mark), so the stop only ratchets up.
+// Stop ladder per timeframe.
+//  Intraday (5m, 30m): initial = entry-candle-low − 0.5%; once up >= +1%, trail 3% below the 20MA.
+//  Swing (1d, 1wk):    initial = entry − 8%;             once up >= +8%, trail 3% below the 8MA.
+const STOP_LADDER = {
+  "5m":  { label: "5-min",  type: "intraday", trigger: 0.01, trailPct: 0.03, trailMA: "ma20" },
+  "30m": { label: "30-min", type: "intraday", trigger: 0.01, trailPct: 0.03, trailMA: "ma20" },
+  "1d":  { label: "Daily",  type: "swing",    init: 0.055, trigger: 0.03, trailPct: 0.015, trailMA: "ma20" },
+  "1wk": { label: "Weekly", type: "swing",    init: 0.08, trigger: 0.06, trailPct: 0.03, trailMA: "ma20" },
+};
+const CANDLE_LOW_BUFFER_PCT = 0.005;   // 0.5% below the entry candle low (intraday initial stop)
+
+// Highest HIGH in the fetched data (proxy for peak-since-entry when no explicit
+// entry date is tracked — uses the full fetched window, which is recent history).
+function peakHigh(result) {
+  const q = result.indicators.quote[0];
+  const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+  const { H } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+  let mx = -Infinity;
+  for (const h of H) if (h != null && h > mx) mx = h;
+  return mx === -Infinity ? null : mx;
+}
+
+// Compute the current ladder stop for one timeframe.
+// args: cfg, entry price, current price, that timeframe's ma8 & ma20, and (intraday) candleLow.
+function ladderStop(cfg, entry, price, ma8, ma20, candleLow) {
+  // Pick the trailing MA for this timeframe.
+  const trailMA = (cfg.trailMA === "ma20") ? ma20 : ma8;
+
+  // No entry given: show the rule text + an illustrative initial stop.
+  if (!entry || entry <= 0) {
+    const initDesc = (cfg.type === "intraday")
+      ? `init: candle low − 0.5%`
+      : `init −${(cfg.init*100).toFixed(0)}%`;
+    const trailDesc = `trail ${(cfg.trailPct*100).toFixed(0)}% below ${cfg.trailMA === "ma20" ? "20MA" : "8MA"} once up +${(cfg.trigger*100).toFixed(0)}%`;
+    // illustrative initial off current data
+    const genericInit = (cfg.type === "intraday")
+      ? (candleLow != null ? candleLow * (1 - CANDLE_LOW_BUFFER_PCT) : null)
+      : price * (1 - cfg.init);
+    return { rung: "—", stop: null, note: `${initDesc} · ${trailDesc}`, generic: genericInit };
+  }
+
+  const gain = (price - entry) / entry;
+  // Initial stop differs by type.
+  const initialStop = (cfg.type === "intraday")
+    ? (candleLow != null ? candleLow * (1 - CANDLE_LOW_BUFFER_PCT) : null)
+    : entry * (1 - cfg.init);
+
+  // Intraday needs the entry candle low to compute its initial stop.
+  if (cfg.type === "intraday" && candleLow == null) {
+    return { rung: "needCandle", stop: null, gain, note: "enter candle low ↑", generic: null };
+  }
+
+  // Trail candidate: trailPct below the timeframe's trailing MA.
+  const trailStop = (trailMA != null) ? trailMA * (1 - cfg.trailPct) : null;
+
+  let rung, stop;
+  if (gain >= cfg.trigger && trailStop != null) {
+    // Trailing phase — ratchet up: never below the initial stop (or entry, whichever protects).
+    rung = "Trail";
+    const floor = (initialStop != null) ? initialStop : -Infinity;
+    stop = Math.max(trailStop, floor);
+  } else {
+    // Initial protective phase.
+    rung = "Initial";
+    stop = initialStop;
+  }
+  return { rung, stop, gain, initialStop, trailStop };
+}
+
+function ladderRow(tfKey, info, entry, candleLow) {
+  const cfg = STOP_LADDER[tfKey];
+  if (!info) {
+    return `<tr><td>${cfg.label}</td><td colspan="5" style="text-align:left; color:var(--muted);">data unavailable</td></tr>`;
+  }
+  const ma20 = info.ma20 != null ? "$" + info.ma20.toFixed(2) : "—";
+  const ma8  = info.ma8  != null ? "$" + info.ma8.toFixed(2)  : "—";
+  const res = ladderStop(cfg, entry, info.price, info.ma8, info.ma20, candleLow);
+
+  if (res.stop == null) {
+    // Either no entry at all, or intraday awaiting a candle-low input.
+    const gainCell = (res.gain != null)
+      ? `<td style="color:${res.gain>=0?'#15803D':'#B91C1C'};">${(res.gain*100>=0?"+":"")+(res.gain*100).toFixed(1)}%</td>`
+      : `<td style="color:var(--muted);">—</td>`;
+    const noteTxt = res.note || "";
+    const stopTxt = (res.generic != null) ? `≈$${res.generic.toFixed(2)}` : "—";
+    return `<tr>
+      <td>${cfg.label}</td>
+      <td>${ma20}</td>
+      <td>${ma8}</td>
+      ${gainCell}
+      <td style="color:var(--muted); text-align:right; font-size:11px;">${noteTxt}</td>
+      <td class="atr-stop-val" style="color:#15803D;">${stopTxt}</td>
+    </tr>`;
+  }
+
+  const rungClass = res.rung === "Trail" ? "trail" : "initial";
+  const gainTxt = (res.gain*100>=0?"+":"") + (res.gain*100).toFixed(1) + "%";
+  const gainColor = res.gain >= 0 ? "#15803D" : "#B91C1C";
+  const stopTxt = (res.stop != null) ? "$" + res.stop.toFixed(2) : "—";
+  return `<tr>
+    <td>${cfg.label}</td>
+    <td>${ma20}</td>
+    <td>${ma8}</td>
+    <td style="color:${gainColor};">${gainTxt}</td>
+    <td><span class="atr-rung ${rungClass}">${res.rung}</span></td>
+    <td class="atr-stop-val" style="color:${rungClass==='initial'?'#B91C1C':'#15803D'};">${stopTxt}</td>
+  </tr>`;
+}
+
+async function runAtrCalc() {
+  const symEl = document.getElementById("atrSym");
+  const entryEl = document.getElementById("atrEntry");
+  const candleLowEl = document.getElementById("atrCandleLow");
+  const out = document.getElementById("atrResult");
+  const stopsBox = document.getElementById("atrStops");
+  const btn = document.getElementById("atrBtn");
+  const ticker = (symEl.value || "").trim().toUpperCase();
+  const rawEntry = parseFloat(entryEl.value) || null;
+  const candleLow = parseFloat(candleLowEl.value) || null;
+  const adjEntryOn = document.getElementById("atrAdjEntry").checked;
+  const entryDate = (document.getElementById("atrEntryDate").value || "").trim();
+  if (!ticker) { out.textContent = "Enter a symbol."; return; }
+
+  btn.disabled = true;
+  stopsBox.style.display = "none";
+  out.innerHTML = `<span style="color:var(--muted);">Fetching ${ticker}…</span>`;
+  try {
+    // Daily data first — drives the opening-range figure (unchanged).
+    const result = await fetchChart(ticker, "1d");
+    const q = result.indicators.quote[0];
+    const adjArr = (result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose) || null;
+    const { H, L, C, A } = clean(q.open, q.high, q.low, q.close, q.volume, adjArr);
+    if (C.length < 16) { out.textContent = "Not enough history for a 14-day ATR."; return; }
+
+    const atr = atr14(H, L, C);            // existing Wilder's ATR(14)
+    if (atr == null) { out.textContent = "Could not compute ATR."; return; }
+    const twenty = atr * 0.20;
+
+    const meta = result.meta || {};
+    const price = (typeof meta.regularMarketPrice === "number") ? meta.regularMarketPrice : C[C.length - 1];
+
+    // Determine the adjustment ratio for converting the raw entry to adjusted-equivalent.
+    // Priority: (1) exact ratio on the entry date if provided & in range;
+    //           (2) oldest-window ratio as estimate (entry predates window, or no date given).
+    let isDivPayer = false, adjRatioOld = 1;
+    if (A && A.length === C.length && C.length > 1) {
+      let i0 = 0;
+      while (i0 < C.length && (C[i0] == null || A[i0] == null || C[i0] === 0)) i0++;
+      if (i0 < C.length) {
+        adjRatioOld = A[i0] / C[i0];
+        if (adjRatioOld < 0.985) isDivPayer = true;  // meaningful distributions in window
+      }
+    }
+    // Resolve the ratio to actually use, and whether it's exact or an estimate.
+    let useRatio = adjRatioOld, ratioExact = false, ratioOlderThanWindow = false;
+    if (entryDate) {
+      const r = adjRatioOnDate(result, entryDate);
+      if (r) {
+        useRatio = r.ratio;
+        ratioExact = !!r.exact;
+        ratioOlderThanWindow = !!r.oldest;
+        if (useRatio < 0.985) isDivPayer = true;
+      }
+    }
+    // Convert the raw entry to its adjusted-equivalent if requested OR if an entry date is given.
+    const doAdjust = (rawEntry != null) && (adjEntryOn || !!entryDate);
+    const entry = doAdjust ? rawEntry * useRatio : rawEntry;
+
+    // --- Opening-range output (unchanged) ---
+    out.innerHTML =
+      `<b style="color:var(--accent);">${ticker}</b> · ` +
+      `Price <b>$${price.toFixed(2)}</b> · ` +
+      `ATR(14) <b>$${atr.toFixed(2)}</b> · ` +
+      `<span style="color:#1F7A4D;">ATR × 20% = <b>$${twenty.toFixed(2)}</b></span>`;
+
+    // --- Tiered trailing-stop ladder across timeframes ---
+    stopsBox.innerHTML = `<span style="color:var(--muted); font-size:12.5px;">Computing 5-min / 30-min / daily / weekly stops…</span>`;
+    stopsBox.style.display = "block";
+
+    // Build per-timeframe info: current price + 20MA & 8MA (on adjusted close).
+    function tfInfo(res, tfKey) {
+      const m = res.meta || {};
+      const qq = res.indicators.quote[0];
+      const aa = (res.indicators.adjclose && res.indicators.adjclose[0] && res.indicators.adjclose[0].adjclose) || null;
+      const cl = clean(qq.open, qq.high, qq.low, qq.close, qq.volume, aa);
+      const p = (typeof m.regularMarketPrice === "number") ? m.regularMarketPrice : cl.C[cl.C.length - 1];
+      // Use the LATEST bar (n-1) so MA values match what a charting platform displays live.
+      const endIdx = cl.A.length - 1;
+      const ma20 = sma(cl.A, 20, endIdx);
+      const ma8 = sma(cl.A, 8, endIdx);
+      return { price: p, ma20, ma8 };
+    }
+    const dailyInfo = tfInfo(result, "1d");
+    let fiveInfo = null, thirtyInfo = null, weeklyInfo = null;
+    const [fiveRes, thirtyRes, weekRes] = await Promise.allSettled([
+      fetchChart(ticker, "5m"),
+      fetchChart(ticker, "30m"),
+      fetchChart(ticker, "1wk")
+    ]);
+    if (fiveRes.status === "fulfilled")  fiveInfo  = tfInfo(fiveRes.value, "5m");
+    if (thirtyRes.status === "fulfilled") thirtyInfo = tfInfo(thirtyRes.value, "30m");
+    if (weekRes.status === "fulfilled")  weeklyInfo = tfInfo(weekRes.value, "1wk");
+
+    const bits = [];
+    if (entry) {
+      if (doAdjust && rawEntry != null && Math.abs(entry - rawEntry) > 0.01) {
+        let tag;
+        if (entryDate && ratioExact) tag = "adjusted (exact, from entry date)";
+        else if (entryDate && ratioOlderThanWindow) tag = "adjusted (approx — entry predates data)";
+        else tag = "adjusted (window estimate)";
+        bits.push(`Entry <b>$${rawEntry.toFixed(2)}</b> raw → <b>$${entry.toFixed(2)}</b> ${tag}`);
+      } else {
+        bits.push(`Entry <b>$${entry.toFixed(2)}</b>`);
+      }
+    }
+    if (candleLow) bits.push(`Entry candle low <b>$${candleLow.toFixed(2)}</b>`);
+    const entryNote = bits.length
+      ? bits.join(" · ")
+      : `Add your entry price (and entry candle low for intraday) for the exact rung &amp; stop.`;
+
+    // Dividend-payer note (auto, only when adjustment is meaningful).
+    const divNote = isDivPayer
+      ? `<div style="font-size:11px; color:#8a5a00; background:#fff7e6; border:1px solid #f0d9a0; border-radius:4px; padding:5px 8px; margin-top:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact;">` +
+        `⚠ ${ticker} pays meaningful distributions, so the chart's adjusted prices sit below the raw prices you paid. ` +
+        `Your broker entry is a <b>raw</b> price; this tool's MAs &amp; “since entry” use <b>adjusted</b> prices. ` +
+        `Tick <b>“Adjust entry for dividends”</b> to compare like-for-like. Price-based stops fit growth names better than income ETFs.</div>`
+      : ``;
+
+    stopsBox.innerHTML =
+      `<div style="font-size:12.5px; color:var(--muted); margin-bottom:2px; font-weight:600;">TRAILING-STOP LADDER (O'Neil-style)</div>` +
+      `<div style="font-size:12px; color:var(--muted); margin-bottom:4px;">${entryNote}</div>` +
+      `<table class="atr-ladder">` +
+      `<thead><tr>` +
+      `<th>Timeframe</th><th>20&#8209;MA</th><th>8&#8209;MA</th><th>Since&nbsp;entry</th><th>Rung</th><th>Stop price</th>` +
+      `</tr></thead><tbody>` +
+      ladderRow("5m", fiveInfo, entry, candleLow) +
+      ladderRow("30m", thirtyInfo, entry, candleLow) +
+      ladderRow("1d", dailyInfo, entry, candleLow) +
+      ladderRow("1wk", weeklyInfo, entry, candleLow) +
+      `</tbody></table>` +
+      divNote +
+      `<div style="font-size:11px; color:var(--muted); margin-top:8px; line-height:1.5;">` +
+      `<b>5-min / 30-min</b>: initial = entry candle low − 0.5% → trail 3% below 20MA once up +1%<br>` +
+      `<b>Daily</b>: initial = entry − 5.5% → trail 1.5% below 20MA once up +3%<br>` +
+      `<b>Weekly</b>: initial = entry − 8% → trail 3% below 20-week MA once up +6%<br>` +
+      `Stops ratchet up only (never lower). Guidance, not advice.</div>`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:#B00000;">Couldn't fetch ${ticker}: ${(e && e.message) || "error"}${e && e.proxyLog ? " — " + e.proxyLog : ""}</span>`;
+    stopsBox.style.display = "none";
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById("atrBtn").addEventListener("click", runAtrCalc);
+document.getElementById("atrSym").addEventListener("keydown", (ev) => { if (ev.key === "Enter") runAtrCalc(); });
+document.getElementById("atrEntry").addEventListener("keydown", (ev) => { if (ev.key === "Enter") runAtrCalc(); });
+document.getElementById("atrCandleLow").addEventListener("keydown", (ev) => { if (ev.key === "Enter") runAtrCalc(); });
+document.getElementById("atrEntryDate").addEventListener("keydown", (ev) => { if (ev.key === "Enter") runAtrCalc(); });
+/* ============== END ATR CALCULATOR ============== */
 
 /* ===================== ALERTS (v4.8) =====================
    While the tab is open, periodically re-checks the Candidates basket (cap 15)
