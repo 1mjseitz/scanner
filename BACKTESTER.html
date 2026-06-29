@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playbook Backtester v1.4.3 — Growth Sleeve & Dual-Trigger 20-Week Circuit Breaker</title>
+<style>
+  :root{
+    --navy:#1a3a5c; --accent:#2c6e9b; --green:#15803D; --red:#B91C1C;
+    --bg:#ffffff; --panel:#f4f7fa; --line:#cccccc; --muted:#555555; --light:#eef3f7;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:Arial,Helvetica,sans-serif;color:#111;background:var(--bg);margin:0;padding:18px;font-size:14px;line-height:1.45;}
+  h1{font-size:20px;color:var(--navy);margin:0 0 2px;}
+  h2{font-size:14px;color:var(--navy);margin:18px 0 6px;border-bottom:2px solid var(--navy);padding-bottom:3px;}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:6px;}
+  .badge{background:#1F7A4D;color:#fff;padding:1px 8px;border-radius:4px;font-weight:bold;font-size:11px;margin-right:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .warn{background:#fff8e1;border:1px solid #e0c060;border-radius:5px;padding:9px 12px;font-size:12px;color:#5a4a00;margin:10px 0;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;margin:10px 0;}
+  label{font-weight:bold;font-size:12px;color:var(--navy);}
+  input,select{font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--line);border-radius:4px;}
+  input[type=number]{width:70px;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0;}
+  th{background:var(--navy);color:#fff;padding:5px 7px;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  td{border:1px solid var(--line);padding:4px 7px;text-align:center;}
+  tr:nth-child(even) td{background:var(--light);}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}
+  .fld{display:flex;flex-direction:column;gap:3px;}
+  button{font-family:inherit;font-size:14px;font-weight:bold;padding:8px 18px;border:none;border-radius:5px;cursor:pointer;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .run{background:var(--green);color:#fff;}
+  .run:hover{background:#11652f;}
+  .pos{color:var(--green);font-weight:bold;}
+  .neg{color:var(--red);font-weight:bold;}
+  .muted{color:var(--muted);}
+  .editable{background:#fffef0;}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:8px 0;}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:5px;padding:8px 10px;}
+  .stat .lbl{font-size:10px;color:var(--muted);font-weight:bold;text-transform:uppercase;}
+  .stat .val{font-size:19px;font-weight:bold;color:var(--navy);}
+  .foot{font-size:10.5px;color:var(--muted);margin-top:18px;border-top:1px solid var(--line);padding-top:8px;}
+  #chartWrap{margin:10px 0;}
+  svg{max-width:100%;height:auto;}
+  .err{background:#fde8e8;border:1px solid var(--red);color:#7a1010;padding:8px 11px;border-radius:5px;font-size:12.5px;margin:8px 0;}
+  @media print{
+    @page{ margin:0.5in; }
+    body{ padding:0; background:#fff !important; color:#111 !important; font-size:11px; }
+    /* hide all inputs, buttons, the warning banner, and the print bar itself */
+    #inputZone, #printBtn, button, #status{ display:none !important; }
+    .warn{ display:none !important; }
+    /* show a clean print-only header */
+    #printHeader{ display:block !important; }
+    /* results take full width, light theme enforced */
+    #results{ width:100%; }
+    .panel, .stat, table, th, td{ background:#fff !important; color:#111 !important; }
+    th{ background:#1A3A5C !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    /* keep colored cells/text readable but force exact rendering */
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    /* avoid awkward page breaks */
+    h2{ break-after:avoid; page-break-after:avoid; }
+    table, #chartWrap, .stat-grid{ break-inside:avoid; page-break-inside:avoid; }
+    tr{ break-inside:avoid; page-break-inside:avoid; }
+    svg{ max-width:100% !important; }
+    a{ color:#111 !important; text-decoration:none; }
+  }
+  /* print-only header, hidden on screen */
+  #printHeader{ display:none; }
+</style>
+</head>
+<body>
+<div id="printHeader" style="border-bottom:2px solid #1A3A5C;padding-bottom:8px;margin-bottom:14px;">
+  <div style="font-size:20px;font-weight:bold;color:#1A3A5C;">Playbook Backtester — Results</div>
+  <div style="font-size:11px;color:#555;">Companion to Retirement Income Playbook v2.8 · personal financial planning, not investment advice · Proxy mode tests analogues, not the actual funds.</div>
+  <div id="printDate" style="font-size:11px;color:#555;"></div>
+</div>
+<h1><span class="badge">v1.4.3</span>Playbook Backtester</h1>
+<div class="sub">Growth Sleeve &amp; Dual-Trigger 20-Week Circuit Breaker · companion to Retirement Income Playbook v2.8 · v1.4.3: print button + print-friendly formatting · personal use, not investment advice</div>
+
+<div class="warn">
+<b>READ THIS BEFORE TRUSTING ANY NUMBER BELOW.</b> A backtest shows how this allocation <i>behaved</i> over the chosen window — not what it will return. With only ~4 years of live history for the full sleeve, an expected return drawn from live-ticker mode has a very wide confidence interval. Proxy-extended mode reaches further back but tests <i>analogues</i> of your funds, not the funds themselves. Treat output as "how this strategy would have behaved," never as a forecast. Conversions, IRMAA, and the bridge ladder are deliberately not modeled — they change after-tax terminal wealth, not gross return.
+</div>
+
+<div id="inputZone">
+<h2>1 · Data Source</h2>
+<div class="panel">
+  <div class="fld" style="max-width:640px;">
+    <label for="proxyBase">Cloudflare Worker proxy base URL (the same endpoint SCANR uses)</label>
+    <input type="text" id="proxyBase" value="https://yahoo-proxy.zbcd8rvn2s.workers.dev/?url=" style="width:100%;">
+  </div>
+  <div class="muted" style="font-size:11.5px;margin-top:6px;">
+    The fetch builds the Yahoo v8 chart URL (<code>range={N}y&amp;interval=1wk</code>, dividend-adjusted) and passes it through your Worker as <code>?url=</code> + <code>encodeURIComponent(...)</code> — exactly the way SCANR does. If you change endpoints, edit <code>buildUrl()</code> near the top of the script. Adjusted close is required so total return includes dividends.
+  </div>
+</div>
+
+<h2>2 · Mode &amp; Window</h2>
+<div class="panel">
+  <div class="row">
+    <div class="fld"><label for="modeSel">Ticker mode</label>
+      <select id="modeSel">
+        <option value="live">Live tickers (actual funds, shorter history)</option>
+        <option value="proxy">Proxy-extended (analogues, longer history)</option>
+      </select></div>
+    <div class="fld"><label for="scopeSel">Sleeve scope</label>
+      <select id="scopeSel">
+        <option value="growth">Growth sleeve only</option>
+        <option value="blended">Blended IRA (35/30/35)</option>
+      </select></div>
+    <div class="fld"><label for="startYr">Start year</label>
+      <input type="number" id="startYr" value="2022" min="1990" max="2026"></div>
+    <div class="fld"><label for="intervalSel">Bar interval</label>
+      <select id="intervalSel" onchange="onIntervalChange()">
+        <option value="1wk">Weekly</option>
+        <option value="1d">Daily</option>
+      </select></div>
+    <div class="fld"><label for="initCap">Initial capital ($)</label>
+      <input type="number" id="initCap" value="100000" min="1000" step="1000" style="width:100px;"></div>
+    <div class="fld"><label for="benchTickerInput">Benchmark ticker</label>
+      <input type="text" id="benchTickerInput" value="" placeholder="auto (SPY/VOO)" style="width:90px;" title="Leave blank to auto-use SPY (proxy) or VOO (live). Type any symbol to compare against it instead."></div>
+  </div>
+  <div class="panel" style="background:#eef6ef;border-color:#bcd9bf;margin-top:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <label id="cbHeader" style="color:var(--green);">CIRCUIT BREAKER — CONDITION BUILDER (weekly bars)</label>
+      <button id="resetBtn" onclick="resetBuilder()" style="background:#5a6b7a;color:#fff;font-size:12px;padding:5px 12px;">↺ Reset to defaults</button>
+    </div>
+    <div style="font-size:11.5px;margin:4px 0 8px;color:#3a5a3a;">
+      Define when the breaker <b>exits to SGOV</b> and when it <b>re-enters</b>. A signal is <b>Price</b> or an N-bar moving average; periods are in <b>weeks or days</b> per the Bar interval above. Tests: below/above (level), crosses below/above (fresh cross), ≥X% below/above (percent buffer — put X in the "A period" box). The <b>Reset to defaults</b> button restores the standard rule for the current interval. What you see here is exactly what runs as "Your rule."
+    </div>
+
+    <div style="font-weight:bold;color:#15803D;font-size:12px;margin-top:4px;">EXIT to SGOV when (any of these):</div>
+    <div class="row" id="exitRow1" style="margin:4px 0;">
+      <div class="fld"><label>Signal A</label><select class="csig" id="ex1a"></select></div>
+      <div class="fld"><label>A per/%</label><input type="number" class="cper" id="ex1ap" value="0" style="width:60px;"></div>
+      <div class="fld"><label>Test</label><select class="cop" id="ex1op"></select></div>
+      <div class="fld"><label>Signal B</label><select class="csig" id="ex1b"></select></div>
+      <div class="fld"><label>B period</label><input type="number" class="cper" id="ex1bp" value="20" style="width:60px;"></div>
+    </div>
+    <div class="row" id="exitRow2" style="margin:4px 0;">
+      <div class="fld"><label>OR · Signal A</label><select class="csig" id="ex2a"></select></div>
+      <div class="fld"><label>A per/%</label><input type="number" class="cper" id="ex2ap" value="4" style="width:60px;"></div>
+      <div class="fld"><label>Test</label><select class="cop" id="ex2op"></select></div>
+      <div class="fld"><label>Signal B</label><select class="csig" id="ex2b"></select></div>
+      <div class="fld"><label>B period</label><input type="number" class="cper" id="ex2bp" value="10" style="width:60px;"></div>
+      <div class="fld"><label>&nbsp;</label><label style="font-weight:normal;"><input type="checkbox" id="ex2on" checked> use</label></div>
+    </div>
+    <div class="row" id="exitRow3" style="margin:4px 0;">
+      <div class="fld"><label>OR · Signal A</label><select class="csig" id="ex3a"></select></div>
+      <div class="fld"><label>A per/%</label><input type="number" class="cper" id="ex3ap" value="4" style="width:60px;"></div>
+      <div class="fld"><label>Test</label><select class="cop" id="ex3op"></select></div>
+      <div class="fld"><label>Signal B</label><select class="csig" id="ex3b"></select></div>
+      <div class="fld"><label>B period</label><input type="number" class="cper" id="ex3bp" value="25" style="width:60px;"></div>
+      <div class="fld"><label>&nbsp;</label><label style="font-weight:normal;"><input type="checkbox" id="ex3on"> use</label></div>
+    </div>
+
+    <div style="font-weight:bold;color:#2c6e9b;font-size:12px;margin-top:10px;">RE-ENTER when (any of these):</div>
+    <div class="row" id="reRow1" style="margin:4px 0;">
+      <div class="fld"><label>Signal A</label><select class="csig" id="re1a"></select></div>
+      <div class="fld"><label>A per/%</label><input type="number" class="cper" id="re1ap" value="0" style="width:60px;"></div>
+      <div class="fld"><label>Test</label><select class="cop" id="re1op"></select></div>
+      <div class="fld"><label>Signal B</label><select class="csig" id="re1b"></select></div>
+      <div class="fld"><label>B period</label><input type="number" class="cper" id="re1bp" value="20" style="width:60px;"></div>
+      <div class="fld"><label>&nbsp;</label><label style="font-weight:normal;"><input type="checkbox" id="re1and"> AND also ↓</label></div>
+    </div>
+    <div class="row" id="reRow1b" style="margin:4px 0 4px 24px;display:none;">
+      <div class="fld"><label>AND · Signal A</label><select class="csig" id="re1a2"></select></div>
+      <div class="fld"><label>A per/%</label><input type="number" class="cper" id="re1a2p" value="4" style="width:60px;"></div>
+      <div class="fld"><label>Test</label><select class="cop" id="re1op2"></select></div>
+      <div class="fld"><label>Signal B</label><select class="csig" id="re1b2"></select></div>
+      <div class="fld"><label>B period</label><input type="number" class="cper" id="re1b2p" value="25" style="width:60px;"></div>
+    </div>
+    <div class="row" id="reRow2" style="margin:4px 0;">
+      <div class="fld"><label>OR · Signal A</label><select class="csig" id="re2a"></select></div>
+      <div class="fld"><label>A per/%</label><input type="number" class="cper" id="re2ap" value="4" style="width:60px;"></div>
+      <div class="fld"><label>Test</label><select class="cop" id="re2op"></select></div>
+      <div class="fld"><label>Signal B</label><select class="csig" id="re2b"></select></div>
+      <div class="fld"><label>B period</label><input type="number" class="cper" id="re2bp" value="50" style="width:60px;"></div>
+      <div class="fld"><label>&nbsp;</label><label style="font-weight:normal;"><input type="checkbox" id="re2on" checked> use</label></div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="fld"><label>SGOV annual yield %</label><input type="number" id="sgovYld" value="3.5" step="0.1"></div>
+      <div class="fld"><label for="timingSel">Trade timing</label>
+        <select id="timingSel">
+          <option value="same">Same-bar close (act on the signal bar)</option>
+          <option value="next">Next bar (full-bar lag, conservative)</option>
+        </select></div>
+      <div class="fld"><label>&nbsp;</label><label style="font-weight:normal;"><input type="checkbox" id="cmpPresets" checked> also race standard preset breakers</label></div>
+    </div>
+  </div>
+</div>
+
+<h2>2b · Dual Momentum (rotation overlay)</h2>
+<div class="panel" style="background:#f3eef8;border-color:#cdbce0;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <label style="color:#6b3f99;">DUAL MOMENTUM — RELATIVE + ABSOLUTE</label>
+    <label style="font-weight:normal;"><input type="checkbox" id="dmOn" checked> race this strategy too</label>
+  </div>
+  <div style="font-size:11.5px;margin:4px 0 10px;color:#4a3a5a;">
+    A separate engine from the breaker above. Each rebalance it <b>ranks the chosen universe by momentum</b> (relative momentum) and holds the top N equally. Before committing, it can check <b>absolute momentum</b>: if a chosen winner's own momentum is below the SGOV/T-bill return, that slot goes to SGOV instead. With the <b>3/6/12 averaged</b> momentum and the <b>13-ETF Papa Bear universe</b>, this reproduces the published Muscular Portfolios "Papa Bear" strategy (top 3, no gate) — and lets you race it against variants (your sleeve, an SGOV gate, top 2 vs 3).
+  </div>
+  <div class="row">
+    <div class="fld"><label>Universe</label>
+      <select id="dmUniverse">
+        <option value="sleeve">My 5-name growth sleeve</option>
+        <option value="papabear">Papa Bear 13-ETF menu</option>
+      </select></div>
+    <div class="fld"><label>Momentum measure</label>
+      <select id="dmLookMode">
+        <option value="single">Single lookback (months)</option>
+        <option value="avg3612">3/6/12-month average (Papa Bear)</option>
+      </select></div>
+    <div class="fld" id="dmLookMoWrap"><label>Lookback (months)</label><input type="number" id="dmLookMo" value="12" min="1" max="24" style="width:70px;"></div>
+    <div class="fld"><label>Hold top N</label><input type="number" id="dmTopN" value="1" min="1" max="13" style="width:60px;"></div>
+    <div class="fld"><label>Rebalance</label>
+      <select id="dmRebal">
+        <option value="monthly">Monthly (~21d / ~4.3wk)</option>
+        <option value="bars">Every bar</option>
+      </select></div>
+    <div class="fld"><label>Absolute-momentum gate</label>
+      <select id="dmAbs">
+        <option value="sgov">vs SGOV/T-bill return (classic GEM)</option>
+        <option value="zero">vs zero (price-only)</option>
+        <option value="off">off (relative only — Papa Bear default)</option>
+      </select></div>
+    <div class="fld" id="dmSkipWrap"><label>Skip most-recent month</label>
+      <label style="font-weight:normal;"><input type="checkbox" id="dmSkip"> 12-1 momentum</label></div>
+  </div>
+  <div class="row" style="margin-top:8px;padding-top:8px;border-top:1px dashed #cdbce0;">
+    <div class="fld"><label style="color:#B91C1C;">Weekly emergency exit</label>
+      <label style="font-weight:normal;"><input type="checkbox" id="dmWeeklyExit"> enable mid-month breaker</label></div>
+    <div class="fld"><label>MA period (weeks)</label><input type="number" id="dmExitMA" value="10" min="3" max="40" style="width:70px;"></div>
+    <div class="fld"><label>Trigger: close below MA by</label>
+      <div style="display:flex;align-items:center;gap:4px;"><input type="number" id="dmExitPct" value="5" min="0" max="20" step="0.5" style="width:55px;"><span style="font-size:12px;">%</span></div></div>
+  </div>
+  <div class="muted" style="font-size:11px;margin-top:4px;color:#7a4a00;">
+    <b>Weekly emergency exit (v1.4):</b> keeps the <b>monthly</b> Papa Bear selection, but adds a <b>weekly downside-only</b> safety check. Each week, any held name that closes more than the trigger % below its own N-week MA rotates to SGOV <i>mid-month</i> rather than waiting for month-end. It only ever <i>removes</i> risk between rebalances \u2014 a name re-enters solely at the next monthly rebalance, and only if it is still top-N and back above its MA. This targets the \u201Ca month is a long time when the market is getting slammed\u201D problem without corrupting the medium-term momentum signal with weekly noise on the entry side. <b>Expect:</b> helps in fast sustained selloffs (2008, Mar 2020); can cost a little in sharp dip-then-snap-back weeks (exits, then misses the V-bounce until month-end). The robustness matrix is the referee.
+  </div>
+  <div class="muted" style="font-size:11px;margin-top:6px;">
+    <b>To replicate published Papa Bear:</b> Universe = Papa Bear 13-ETF · Momentum = 3/6/12 average · Hold top 3 · gate = off. The 13-ETF menu carries its own defense (it rotates into gold/Treasuries when stocks fall), so the published version uses no cash gate. On your 5-equity sleeve there is no safe haven, so the SGOV gate is the only defense — that is why the two universes behave differently. "3/6/12 average" ranks on the mean of the trailing 3-, 6-, and 12-month returns, exactly the column on the Papa Bear screen. The Papa Bear menu ignores the sleeve table above and uses its own fixed live/proxy tickers. <b style="color:#7a4a00;">Note: in Proxy-extended mode the picks show stand-in symbols (IWO\u2248VIOG, EEM\u2248VWO, DBC\u2248PDBC, GLD\u2248IAU, TLT\u2248EDV, etc.) because the real ETFs did not exist in 2007 \u2014 the results panel spells out every substitution. Switch to Live mode to see the real symbols for website comparison.</b>
+  </div>
+</div>
+
+<h2>3 · Sleeve Definition &amp; Proxy Map</h2>
+<div class="sub">Weights reflect playbook v2.8 (growth sleeve with VXF at 7%). Edit any weight or proxy ticker inline; the table re-reads on the next run. Weights are renormalized to 100% automatically.</div>
+<table id="sleeveTbl">
+  <thead><tr><th>Role</th><th>Live ticker</th><th>Proxy (long history)</th><th>Growth wt %</th><th>Breaker tier</th></tr></thead>
+  <tbody id="sleeveBody"></tbody>
+</table>
+<div class="muted" style="font-size:11.5px;">
+  Blended-IRA weights apply the 35/30/35 structure: growth names scaled to 35% of the IRA, income names to 30%, SGOV to 35%. In live mode the short-history credit names (JAAA/JBBB) limit the start year; proxy mode swaps a bank-loan/floating-rate analogue to extend the window. SGOV is modeled as a cash-like ~par holding earning its T-bill yield.
+</div>
+
+<div style="margin:14px 0;">
+  <button class="run" id="runBtn" onclick="runBacktest()">▶ Run Backtest</button>
+  <button id="robustBtn" onclick="runRobustness()" style="background:#7a4a8a;color:#fff;font-size:14px;font-weight:bold;padding:8px 18px;margin-left:8px;">⟳ Robustness check (multi-start-year)</button>
+  <span id="status" class="muted" style="margin-left:12px;"></span>
+</div>
+</div><!-- /inputZone -->
+
+<div style="margin:4px 0 14px;">
+  <button id="printBtn" onclick="window.print()" style="background:#15803D;color:#fff;font-size:13px;font-weight:bold;padding:7px 16px;border:none;border-radius:5px;cursor:pointer;">🖨 Print / Save as PDF</button>
+  <span class="muted" style="margin-left:10px;font-size:11.5px;">Prints the results below (inputs hidden). Choose "Save as PDF" in the print dialog to keep a copy.</span>
+</div>
+
+<div id="results"></div>
+
+<div class="foot">
+  Playbook Backtester · companion to Retirement Income Playbook v2.8 · June 2026 · For personal financial planning purposes only. Not investment advice. Returns are historical/simulated, dividend-adjusted where data allows, and do not predict future results. Proxy mode tests analogues, not the actual funds. Verify against live custodian data and confirm with your wealth management team before acting.
+</div>
+<script>
+/* ===================== PLAYBOOK BACKTESTER v1.0 =====================
+   Dual-trigger 20-week circuit breaker over the growth sleeve.
+   Data via the SCANR Cloudflare Worker proxy (adjusted-close weekly bars).
+   ==================================================================== */
+
+// Sleeve definition — playbook v2.8. {role, live, proxy, growthWt, blendedWt, tier}
+const SLEEVE = [
+  {role:"US large-cap",     live:"VOO",  proxy:"SPY", growthWt:36.5, blendedWt:12.8, tier:"Tier1"},
+  {role:"US large-growth",  live:"QQQM", proxy:"QQQ", growthWt:36.5, blendedWt:12.8, tier:"Tier1"},
+  {role:"US mid/small",     live:"VXF",  proxy:"VXF", growthWt:7.0,  blendedWt:2.4,  tier:"Tier1"},
+  {role:"Intl developed",   live:"AVDE", proxy:"EFA", growthWt:12.5, blendedWt:4.4,  tier:"Tier1"},
+  {role:"Emerging mkts",    live:"EEM",  proxy:"EEM", growthWt:8.3,  blendedWt:2.9,  tier:"Tier1"},
+];
+
+// Papa Bear 13-ETF momentum universe (Muscular Portfolios). {role, live, proxy}
+// proxies extend history before the live ETF's inception so robustness can reach back.
+const PAPABEAR = [
+  {role:"US small-cap growth", live:"VIOG", proxy:"IWO"},   // S&P600 growth -> Russell2000 growth
+  {role:"US small-cap value",  live:"VIOV", proxy:"IWN"},   // S&P600 value  -> Russell2000 value
+  {role:"Dev. large-cap",      live:"VEA",  proxy:"EFA"},   // developed mkts
+  {role:"US large-cap value",  live:"VTV",  proxy:"VTV"},
+  {role:"US REITs",            live:"VNQ",  proxy:"VNQ"},
+  {role:"Emerging mkts",       live:"VWO",  proxy:"EEM"},
+  {role:"Commodities",         live:"PDBC", proxy:"DBC"},   // PDBC young -> DBC longer
+  {role:"US large-cap growth", live:"VUG",  proxy:"VUG"},
+  {role:"US corp bonds",       live:"VCLT", proxy:"LQD"},   // long corp -> iShares corp
+  {role:"US Treasury 30yr",    live:"EDV",  proxy:"TLT"},   // EDV strips -> 20+yr Treasury
+  {role:"Non-US bonds",        live:"BNDX", proxy:"BWX"},   // intl agg -> intl Treasury
+  {role:"Gold",                live:"IAU",  proxy:"GLD"},
+  {role:"US Treasury 10yr",    live:"VGIT", proxy:"IEF"},   // intermediate Treasury
+];
+function papabearTickers(mode){
+  return PAPABEAR.map(p=> mode==="live" ? p.live : p.proxy);
+}
+// reverse lookup: given any ticker (live OR proxy), return {real, role, isProxy}
+function papabearInfo(ticker, mode){
+  const u=ticker.toUpperCase();
+  for(const p of PAPABEAR){
+    if(p.live.toUpperCase()===u)  return {real:p.live, role:p.role, isProxy:false};
+    if(p.proxy.toUpperCase()===u) return {real:p.live, role:p.role, isProxy:(p.proxy.toUpperCase()!==p.live.toUpperCase())};
+  }
+  return null;
+}
+// through the proxy exactly the way SCANR does:  base + encodeURIComponent(yahooUrl).
+// EDIT the yahooUrl line below if you ever change endpoints.
+function buildUrl(base, ticker, years){
+  const iv = (window.__cfgInterval==="1d") ? "1d" : "1wk";
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${years}y&interval=${iv}&events=div`;
+  // `base` should end with ?url=  (e.g. https://yahoo-proxy.xxxx.workers.dev/?url=)
+  return `${base}${encodeURIComponent(yahooUrl)}`;
+}
+
+// ---- render the editable sleeve table ----
+function renderSleeve(){
+  const tb=document.getElementById("sleeveBody");
+  tb.innerHTML = SLEEVE.map((s,i)=>`<tr>
+    <td style="text-align:left;">${s.role}</td>
+    <td><input class="editable" style="width:64px;" id="live${i}" value="${s.live}"></td>
+    <td><input class="editable" style="width:64px;" id="proxy${i}" value="${s.proxy}"></td>
+    <td><input class="editable" type="number" style="width:62px;" id="wt${i}" value="${s.growthWt}"></td>
+    <td>${s.tier}</td>
+  </tr>`).join("");
+}
+
+// ---- simple moving average at index i over `period` bars (on adj-close array) ----
+function sma(arr, period, i){
+  if(i+1<period) return null;
+  let s=0; for(let k=i-period+1;k<=i;k++) s+=arr[k];
+  return s/period;
+}
+
+// ---- fetch weekly adjusted-close bars for a ticker ----
+async function fetchBars(base, ticker, years){
+  const url=buildUrl(base,ticker,years);
+  const r=await fetch(url);
+  if(!r.ok) throw new Error(`${ticker}: HTTP ${r.status}`);
+  const j=await r.json();
+  // Expect Yahoo-style chart JSON. Pull timestamps + adjclose.
+  const res = j.chart?.result?.[0] || j.result?.[0] || j;
+  const ts = res.timestamp || res.timestamps;
+  const adj = res.indicators?.adjclose?.[0]?.adjclose
+           || res.indicators?.quote?.[0]?.close
+           || res.adjclose || res.close;
+  if(!ts || !adj) throw new Error(`${ticker}: no adjclose in response`);
+  const out=[];
+  for(let i=0;i<ts.length;i++){
+    if(adj[i]!=null) out.push({t:ts[i]*1000, c:adj[i]});
+  }
+  return out;
+}
+</script>
+<script>
+/* ===================== DUAL-TRIGGER BREAKER SIMULATION =====================
+   For one ticker's weekly adj-close series, produce a weekly "in-market" mask:
+   state HOLD (invested) or SGOV (rotated out), per the dual-trigger rules.
+   EXIT (HOLD->SGOV) whichever first: close < 20wkMA  OR  4wkMA crosses below 10wkMA
+   ENTER (SGOV->HOLD) whichever first: close > 20wkMA  OR  4wkMA crosses above 50wkMA
+   Returns array same length as bars: true=invested that week, false=in SGOV.
+   ========================================================================= */
+/* ---- align multiple tickers' bars onto a common weekly timeline (by timestamp) ---- */
+function alignSeries(seriesMap, tickers){
+  // collect the union of timestamps, then for each ticker forward-fill to that grid
+  const allT = new Set();
+  tickers.forEach(t=> seriesMap[t].forEach(b=> allT.add(b.t)));
+  const grid = Array.from(allT).sort((a,b)=>a-b);
+  const aligned = {};
+  tickers.forEach(t=>{
+    const bars=seriesMap[t]; const out=new Array(grid.length).fill(null);
+    let j=0, last=null;
+    for(let i=0;i<grid.length;i++){
+      while(j<bars.length && bars[j].t<=grid[i]){ last=bars[j].c; j++; }
+      out[i]=last;
+    }
+    aligned[t]=out;
+  });
+  return {grid, aligned};
+}
+
+/* ---- run the full sleeve backtest: returns weekly equity curves for
+        Breaker, Buy&Hold, and SPY benchmark ---- */
+function simulate(grid, aligned, masks, weights, tickers, cfg){
+  const N=grid.length;
+  const wkYield = Math.pow(1+cfg.sgovYld/100, 1/(cfg.ppy||52))-1;  // SGOV per-bar accrual
+  // normalize weights
+  const wsum = tickers.reduce((a,t)=>a+weights[t],0);
+  const w = {}; tickers.forEach(t=> w[t]=weights[t]/wsum);
+
+  // weekly returns per ticker
+  const ret = {};
+  tickers.forEach(t=>{
+    const a=aligned[t]; const r=new Array(N).fill(0);
+    for(let i=1;i<N;i++){ r[i] = (a[i-1]&&a[i]) ? (a[i]/a[i-1]-1) : 0; }
+    ret[t]=r;
+  });
+
+  let eqB=cfg.cap, eqBH=cfg.cap;        // breaker, buy&hold
+  const curveB=[eqB], curveBH=[eqBH], dates=[grid[0]];
+  let weeksInMkt=0, totalWeeks=0, switches=0;
+  const prevState={}; tickers.forEach(t=>prevState[t]=true);
+
+  for(let i=1;i<N;i++){
+    let rB=0, rBH=0, invFrac=0;
+    tickers.forEach(t=>{
+      rBH += w[t]*ret[t][i];
+      const inMkt = masks[t].mask[i];
+      if(inMkt){ rB += w[t]*ret[t][i]; invFrac+=w[t]; }
+      else      { rB += w[t]*wkYield; }   // parked in SGOV
+      if(masks[t].mask[i]!==prevState[t]){ switches++; prevState[t]=masks[t].mask[i]; }
+    });
+    eqB *= (1+rB); eqBH *= (1+rBH);
+    curveB.push(eqB); curveBH.push(eqBH); dates.push(grid[i]);
+    weeksInMkt += invFrac; totalWeeks += 1;
+  }
+  return {curveB, curveBH, dates, eqB, eqBH, exposure: weeksInMkt/totalWeeks, switches};
+}
+
+/* ---- performance stats from an equity curve (weekly) ---- */
+function stats(curve, dates, ppy){
+  ppy = ppy || 52;
+  const n=curve.length;
+  const years=(dates[n-1]-dates[0])/(365.25*24*3600*1000);
+  const totalRet=curve[n-1]/curve[0]-1;
+  const cagr=Math.pow(curve[n-1]/curve[0], 1/years)-1;
+  // max drawdown
+  let peak=curve[0], maxDD=0;
+  for(const v of curve){ if(v>peak)peak=v; const dd=v/peak-1; if(dd<maxDD)maxDD=dd; }
+  // per-bar vol -> annualized; Sharpe (rf=0)
+  const rs=[]; for(let i=1;i<n;i++) rs.push(curve[i]/curve[i-1]-1);
+  const mean=rs.reduce((a,b)=>a+b,0)/rs.length;
+  const sd=Math.sqrt(rs.reduce((a,b)=>a+(b-mean)**2,0)/rs.length);
+  const annVol=sd*Math.sqrt(ppy);
+  const sharpe=sd>0 ? (mean*ppy)/annVol : 0;
+  return {totalRet, cagr, maxDD, annVol, sharpe, years};
+}
+</script>
+<script>
+/* ===================== ORCHESTRATION + RENDER ===================== */
+function fmtPct(x){ return (x>=0?"+":"")+(x*100).toFixed(1)+"%"; }
+function fmtMoney(x){ return "$"+Math.round(x).toLocaleString(); }
+function cls(x){ return x>=0?"pos":"neg"; }
+
+async function runBacktest(){
+  const status=document.getElementById("status");
+  const out=document.getElementById("results");
+  out.innerHTML="";
+  const base=document.getElementById("proxyBase").value.trim();
+  if(!base || !base.includes("workers.dev") || !base.includes("?url=")){
+    out.innerHTML=`<div class="err">The proxy base URL should be your Worker ending in <code>?url=</code> (e.g. <code>https://yahoo-proxy.xxxx.workers.dev/?url=</code>). Check section 1.</div>`;
+    return;
+  }
+  const mode=document.getElementById("modeSel").value;
+  const scope=document.getElementById("scopeSel").value;
+  const startYr=+document.getElementById("startYr").value;
+  const years=Math.max(1, (2026-startYr)+1);
+  const interval=document.getElementById("intervalSel").value;
+  window.__cfgInterval=interval;
+  const cfg={
+    interval:interval,
+    ppy:(interval==="1d")?252:52,           // periods per year for accrual/annualization
+    sgovYld:+document.getElementById("sgovYld").value,
+    timing:document.getElementById("timingSel").value,
+    cap:+document.getElementById("initCap").value,
+  };
+  // read sleeve table (live/proxy/weight edits)
+  const rows=SLEEVE.map((s,i)=>({
+    role:s.role,
+    ticker: mode==="live" ? document.getElementById("live"+i).value.trim()
+                          : document.getElementById("proxy"+i).value.trim(),
+    wt:+document.getElementById("wt"+i).value,
+    tier:s.tier
+  })).filter(r=>r.ticker && r.wt>0);
+  const tickers=[...new Set(rows.map(r=>r.ticker))];
+  const benchOverride = (document.getElementById("benchTickerInput").value || "").trim().toUpperCase();
+  const benchTicker = benchOverride || (mode==="live" ? "VOO" : "SPY");
+  // if dual momentum uses the Papa Bear universe, fetch those tickers too
+  const dmUniverse = document.getElementById("dmUniverse").value;
+  const dmTickers = (document.getElementById("dmOn").checked && dmUniverse==="papabear")
+                      ? papabearTickers(mode) : tickers;
+  const fetchList=[...new Set([...tickers, benchTicker, ...dmTickers])];
+
+  try{
+    const seriesMap={};
+    for(const t of fetchList){
+      status.textContent=`Fetching ${t} …`;
+      seriesMap[t]=await fetchBars(base,t,years);
+      await new Promise(r=>setTimeout(r,150));
+    }
+    status.textContent="Aligning & simulating …";
+    // trim each series to startYr
+    const cutoff=new Date(startYr,0,1).getTime();
+    fetchList.forEach(t=> seriesMap[t]=seriesMap[t].filter(b=>b.t>=cutoff));
+    const {grid, aligned}=alignSeries(seriesMap, fetchList);
+
+    // breaker masks per sleeve ticker (DUAL-TRIGGER)
+    const weights={}; rows.forEach(r=> weights[r.ticker]=(weights[r.ticker]||0)+r.wt);
+
+    // helper: run a named rule across the sleeve -> {name, rule, sim, stats, decidedByTicker}
+    function runRule(name, rule){
+      const masks={}; const decidedByTicker={};
+      tickers.forEach(t=>{ const m=breakerMaskAligned(aligned[t],cfg,rule); masks[t]=m; decidedByTicker[t]=m.decided; });
+      const sm=simulate(grid, aligned, masks, weights, tickers, cfg);
+      return {name, rule, sim:sm, st:stats(sm.curveB,sm.dates,cfg.ppy), decidedByTicker};
+    }
+
+    // the user's custom rule
+    const customRule=readCustomRule();
+    const custom=runRule("Your custom rule", customRule);
+
+    // presets (optional)
+    const racePresets = document.getElementById("cmpPresets").checked;
+    const presets = racePresets ? presetRules(interval).map(p=>runRule(p.name,p.rule)) : [];
+
+    const sim=custom.sim;
+    // benchmark buy&hold
+    const benchCurve=[cfg.cap]; let eb=cfg.cap;
+    for(let i=1;i<grid.length;i++){
+      const a=aligned[benchTicker];
+      const r=(a[i-1]&&a[i])?(a[i]/a[i-1]-1):0; eb*=(1+r); benchCurve.push(eb);
+    }
+    const sB=custom.st, sBH=stats(sim.curveBH,sim.dates,cfg.ppy), sBN=stats(benchCurve,sim.dates,cfg.ppy);
+
+    // SINGLE-NAME rotation log for the custom rule
+    let rotLog=null;
+    if(tickers.length===1){
+      rotLog=rotationLog(custom.decidedByTicker[tickers[0]], aligned[tickers[0]], grid, cfg);
+    }
+
+    // DUAL MOMENTUM (portfolio-level rotation) — its own engine
+    let momentum=null;
+    if(document.getElementById("dmOn").checked){
+      const mcfg=readMomentumCfg(cfg);
+      // momentum universe: sleeve tickers, or the Papa Bear set if selected
+      const momTickers = (mcfg.universe==="papabear") ? [...new Set(dmTickers)] : tickers;
+      const mSim=simulateMomentum(grid, aligned, momTickers, cfg, mcfg);
+      momentum={mcfg, sim:mSim, st:stats(mSim.curve, mSim.dates, cfg.ppy), momTickers};
+    }
+
+    renderResults({cfg,mode,scope,startYr,rows,tickers,custom,customRule,presets,sim,benchCurve,benchTicker,sB,sBH,sBN,rotLog,momentum});
+    status.textContent=`Done · ${sim.dates.length} ${interval==="1d"?"daily":"weekly"} bars · ${sB.years.toFixed(1)} yrs`;
+  }catch(e){
+    out.innerHTML=`<div class="err"><b>Fetch or simulation error:</b> ${e.message}<br><span style="font-size:11px;">Check the Worker URL shape in <code>buildUrl()</code>, and that the proxy returns weekly adjusted-close JSON. CORS must allow this page's origin.</span></div>`;
+    status.textContent="";
+  }
+}
+
+/* ===================== ROBUSTNESS CHECK =====================
+   Re-run every rule (your custom + presets) across several start years and show a
+   matrix of CAGR / max-drawdown per start year. Reveals whether a rule's edge is
+   stable (real) or only appears in one window (luck / warmup artifact). */
+async function runRobustness(){
+  const status=document.getElementById("status");
+  const out=document.getElementById("results");
+  out.innerHTML="";
+  const base=document.getElementById("proxyBase").value.trim();
+  if(!base || !base.includes("workers.dev") || !base.includes("?url=")){
+    out.innerHTML=`<div class="err">Set your Worker proxy base URL (ending in <code>?url=</code>) in section 1 first.</div>`;
+    return;
+  }
+  const mode=document.getElementById("modeSel").value;
+  const scope=document.getElementById("scopeSel").value;
+  const interval=document.getElementById("intervalSel").value;
+  window.__cfgInterval=interval;
+  const cfg={ interval, ppy:(interval==="1d")?252:52,
+    sgovYld:+document.getElementById("sgovYld").value,
+    timing:document.getElementById("timingSel").value,
+    cap:+document.getElementById("initCap").value };
+  const rows=SLEEVE.map((s,i)=>({role:s.role,
+    ticker: mode==="live" ? document.getElementById("live"+i).value.trim()
+                          : document.getElementById("proxy"+i).value.trim(),
+    wt:+document.getElementById("wt"+i).value, tier:s.tier
+  })).filter(r=>r.ticker && r.wt>0);
+  const tickers=[...new Set(rows.map(r=>r.ticker))];
+  const benchOverride=(document.getElementById("benchTickerInput").value||"").trim().toUpperCase();
+  const benchTicker=benchOverride || (mode==="live"?"VOO":"SPY");
+  const dmUniverseR = document.getElementById("dmUniverse").value;
+  const dmTickersR = (document.getElementById("dmOn").checked && dmUniverseR==="papabear")
+                       ? papabearTickers(mode) : tickers;
+  const fetchList=[...new Set([...tickers, benchTicker, ...dmTickersR])];
+  const weights={}; rows.forEach(r=> weights[r.ticker]=(weights[r.ticker]||0)+r.wt);
+
+  // candidate start years (only those with enough history get used after fetch)
+  const startYears=[2007,2010,2013,2016,2019];
+
+  try{
+    // fetch full history ONCE (max range)
+    const seriesFull={};
+    for(const t of fetchList){
+      status.textContent=`Fetching ${t} (full history) …`;
+      seriesFull[t]=await fetchBars(base,t,20);
+      await new Promise(r=>setTimeout(r,150));
+    }
+    status.textContent="Running robustness matrix …";
+
+    // the rules to test: custom + presets
+    const customRule=readCustomRule();
+    const ruleDefs=[{name:"Your rule", rule:customRule},
+      ...presetRules(interval).map(p=>({name:p.name.split("(")[0].trim(), rule:p.rule}))];
+
+    // for each start year, trim + align + run each rule + buy&hold + benchmark
+    const matrix={};  // matrix[ruleName][startYr] = {cagr, maxDD}
+    ruleDefs.forEach(rd=> matrix[rd.name]={});
+    matrix["Buy & Hold"]={}; matrix[benchTicker+" benchmark"]={};
+    const dmActive=document.getElementById("dmOn").checked;
+    const mcfgR = dmActive ? readMomentumCfg(cfg) : null;
+    if(dmActive) matrix["Dual momentum"]={};
+    const usedYears=[];
+
+    for(const yr of startYears){
+      const cutoff=new Date(yr,0,1).getTime();
+      const sm={}; let ok=true;
+      const minBars=(interval==="1d"?260:60);
+      // required-for-the-window names are the sleeve + benchmark; Papa Bear momentum
+      // names are optional (momScore simply skips any without enough history)
+      const requiredT=new Set([...tickers, benchTicker]);
+      fetchList.forEach(t=>{ sm[t]=seriesFull[t].filter(b=>b.t>=cutoff); if(requiredT.has(t) && sm[t].length<minBars) ok=false; });
+      if(!ok) continue;  // not enough history for this start year
+      usedYears.push(yr);
+      const {grid, aligned}=alignSeries(sm, fetchList);
+      // each rule
+      ruleDefs.forEach(rd=>{
+        const masks={}; tickers.forEach(t=> masks[t]=breakerMaskAligned(aligned[t],cfg,rd.rule));
+        const s2=simulate(grid,aligned,masks,weights,tickers,cfg);
+        const st=stats(s2.curveB,s2.dates,cfg.ppy);
+        matrix[rd.name][yr]={cagr:st.cagr, maxDD:st.maxDD};
+      });
+      // buy & hold (sleeve)
+      const masksBH={}; tickers.forEach(t=> masksBH[t]={mask:aligned[t].map(()=>true),decided:aligned[t].map(()=>true)});
+      const smBH=simulate(grid,aligned,masksBH,weights,tickers,cfg);
+      const stBH=stats(smBH.curveBH,smBH.dates,cfg.ppy);
+      matrix["Buy & Hold"][yr]={cagr:stBH.cagr, maxDD:stBH.maxDD};
+      // benchmark
+      const bc=[cfg.cap]; let eb=cfg.cap;
+      for(let i=1;i<grid.length;i++){const a=aligned[benchTicker];const r=(a[i-1]&&a[i])?a[i]/a[i-1]-1:0;eb*=(1+r);bc.push(eb);}
+      const stBN=stats(bc,grid,cfg.ppy);
+      matrix[benchTicker+" benchmark"][yr]={cagr:stBN.cagr, maxDD:stBN.maxDD};
+      // dual momentum
+      if(dmActive){
+        const momTickersR = (mcfgR.universe==="papabear") ? [...new Set(dmTickersR)] : tickers;
+        // only momentum names with enough history this start year (others simply unranked)
+        const momHave = momTickersR.filter(t=> sm[t] && sm[t].length >= (interval==="1d"?260:60));
+        const mS=simulateMomentum(grid,aligned,momHave,cfg,mcfgR);
+        const stM=stats(mS.curve,mS.dates,cfg.ppy);
+        matrix["Dual momentum"][yr]={cagr:stM.cagr, maxDD:stM.maxDD};
+      }
+    }
+
+    renderRobustness(matrix, usedYears, {interval, mode, scope, rows, benchTicker});
+    status.textContent=`Robustness done · ${usedYears.length} start years`;
+  }catch(e){
+    out.innerHTML=`<div class="err"><b>Robustness error:</b> ${e.message}</div>`;
+    status.textContent="";
+  }
+}
+
+function renderRobustness(matrix, years, meta){
+  const ruleNames=Object.keys(matrix);
+  const head=`<tr><th style="text-align:left;">Strategy</th>${years.map(y=>`<th>${y}<br><span style="font-weight:normal;font-size:10px;">CAGR · maxDD</span></th>`).join("")}<th>CAGR avg</th><th>CAGR spread</th></tr>`;
+  const fmtCell=c=> c ? `<span class="${c.cagr>=0?'pos':'neg'}">${(c.cagr*100).toFixed(1)}%</span><br><span style="font-size:10px;color:#999;">${(c.maxDD*100).toFixed(0)}%</span>` : "—";
+  const rowsHtml=ruleNames.map(rn=>{
+    const cells=years.map(y=>`<td>${fmtCell(matrix[rn][y])}</td>`).join("");
+    const cagrs=years.map(y=>matrix[rn][y]?.cagr).filter(x=>x!=null);
+    const avg=cagrs.reduce((a,b)=>a+b,0)/(cagrs.length||1);
+    const spread=cagrs.length?(Math.max(...cagrs)-Math.min(...cagrs)):0;
+    const bold = rn==="Your rule";
+    return `<tr><td style="text-align:left;">${bold?"<b>":""}${rn}${bold?"</b>":""}</td>${cells}<td><b>${(avg*100).toFixed(1)}%</b></td><td class="${spread>0.05?'neg':''}">${(spread*100).toFixed(1)} pts</td></tr>`;
+  }).join("");
+
+  document.getElementById("results").innerHTML=`
+    <h2>Robustness Check — same rules across ${years.length} start years (${meta.interval==="1d"?"daily":"weekly"})</h2>
+    <div class="panel" style="font-size:12.5px;">
+      Each rule re-run starting in ${years.join(", ")}. A rule whose CAGR is steady across all start years is <b>robust</b>. A rule that looks great from one year but mediocre from others was <b>lucky / window-dependent</b> — watch the "CAGR spread" column: small spread = stable, large spread = fragile. The 50/200 cross is the one to scrutinize: if its edge collapses at later start years, the earlier result was a 200-bar-warmup artifact, not a real edge.
+    </div>
+    <table><thead>${head}</thead><tbody>${rowsHtml}</tbody></table>
+    <div class="muted" style="font-size:11px;margin-top:6px;">
+      Each cell shows CAGR (color) and max drawdown (grey) for that start year. "CAGR spread" = best minus worst start-year CAGR; a spread above ~5 points means the rule's return depends heavily on when you start — a red flag for over-fitting. Drawdown matters as much as CAGR for a retiree drawing income.
+    </div>`;
+}
+
+// mask built directly on an aligned (forward-filled) close array
+/* A "signal value" at index i: kind 'price' -> close; kind 'ma' -> N-week SMA. */
+function sigVal(c, sig, i){
+  if(sig.kind==="price") return c[i];
+  return sma(c, sig.period, i);
+}
+/* Evaluate one condition at index i. A condition is either:
+   - a leaf {a, op, b, pct?}:  op in 'below','above','xbelow','xabove','pctbelow','pctabove'
+   - an AND-group {and:[cond,cond,...]}  (all must be true)
+   ops: below/above = level test; xbelow/xabove = fresh crossover; pctbelow/pctabove =
+   A is at least `pct`% below/above B (e.g. price <= 25MA*(1-pct/100)). */
+function evalCond(c, cond, i){
+  if(cond.and) return cond.and.every(x=>evalCond(c,x,i));
+  const a=sigVal(c,cond.a,i), b=sigVal(c,cond.b,i);
+  if(a==null||b==null||isNaN(a)||isNaN(b)) return false;
+  if(cond.op==="below")  return a<b;
+  if(cond.op==="above")  return a>b;
+  if(cond.op==="pctbelow") return a <= b*(1-(cond.pct||0)/100);
+  if(cond.op==="pctabove") return a >= b*(1+(cond.pct||0)/100);
+  // crossover needs prior bar
+  if(i<1) return false;
+  const a1=sigVal(c,cond.a,i-1), b1=sigVal(c,cond.b,i-1);
+  if(a1==null||b1==null||isNaN(a1)||isNaN(b1)) return false;
+  if(cond.op==="xbelow") return a1>=b1 && a<b;
+  if(cond.op==="xabove") return a1<=b1 && a>b;
+  return false;
+}
+
+/* Configurable breaker. rule = {exit:[cond,...], reenter:[cond,...]} (OR within each list). */
+function breakerMaskAligned(closeArr, cfg, rule){
+  const c=closeArr.map(x=>x==null?NaN:x);
+  const n=c.length;
+  const decided=new Array(n).fill(true); let state="HOLD";
+  for(let i=0;i<n;i++){
+    if(state==="HOLD"){
+      if(rule.exit.some(cond=>evalCond(c,cond,i))) state="SGOV";
+    }else{
+      if(rule.reenter.some(cond=>evalCond(c,cond,i))) state="HOLD";
+    }
+    decided[i]=(state==="HOLD");
+  }
+  // timing lag (same=1, next=2). See note: same-week is realistic, not lookahead.
+  const lag=(cfg.timing==="next")?2:1;
+  const mask=new Array(n).fill(true);
+  for(let i=0;i<n;i++){ mask[i]=(i>=lag)?decided[i-lag]:true; }
+  return {mask, decided};
+}
+
+/* preset breaker rules for the side-by-side race, interval-aware */
+function presetRules(interval){
+  const P={kind:"price"}, MA=p=>({kind:"ma",period:p});
+  if(interval==="1d"){
+    // DAILY presets (day periods). First one = your exact custom daily rule.
+    return [
+      {name:"Daily 100/25/4% (4x100 OR px<100 OR px≥4% below 25 · re: px>25&4x25 OR px>100)",
+       rule:{
+         exit:[
+           {a:MA(4),op:"xbelow",b:MA(100)},
+           {a:P,op:"below",b:MA(100)},
+           {a:P,op:"pctbelow",b:MA(25),pct:4}
+         ],
+         reenter:[
+           {and:[{a:P,op:"above",b:MA(25)}, {a:MA(4),op:"xabove",b:MA(25)}]},
+           {a:P,op:"above",b:MA(100)}
+         ]
+       }},
+      {name:"Daily 50/200 golden cross (exit px<200, re-enter px>200)",
+       rule:{exit:[{a:P,op:"below",b:MA(200)}], reenter:[{a:P,op:"above",b:MA(200)}]}},
+      {name:"Daily 100 symmetric (exit px<100, re-enter px>100)",
+       rule:{exit:[{a:P,op:"below",b:MA(100)}], reenter:[{a:P,op:"above",b:MA(100)}]}},
+      {name:"Daily 50/100 cross (exit 50x<100, re-enter 50x>100)",
+       rule:{exit:[{a:MA(50),op:"xbelow",b:MA(100)}], reenter:[{a:MA(50),op:"xabove",b:MA(100)}]}},
+    ];
+  }
+  // WEEKLY presets (unchanged)
+  return [
+    {name:"Symmetric 20/20 (exit<20, re-enter>20)",
+     rule:{exit:[{a:P,op:"below",b:MA(20)}], reenter:[{a:P,op:"above",b:MA(20)}]}},
+    {name:"Fast re-entry (exit<20, re-enter>10)",
+     rule:{exit:[{a:P,op:"below",b:MA(20)}], reenter:[{a:P,op:"above",b:MA(10)}]}},
+    {name:"Slow re-entry (exit<20, re-enter>50)",
+     rule:{exit:[{a:P,op:"below",b:MA(20)}], reenter:[{a:P,op:"above",b:MA(50)}]}},
+    {name:"Golden-cross style (exit 4x<10, re-enter 4x>50)",
+     rule:{exit:[{a:MA(4),op:"xbelow",b:MA(10)}], reenter:[{a:MA(4),op:"xabove",b:MA(50)}]}},
+  ];
+}
+
+/* Build a rotation log from a decided-signal series + prices + dates.
+   Returns list of {exitDate, exitPx, reDate, rePx, mktMovePct, dodgedPct, weeksOut}.
+   "mktMovePct" = market move from exit to re-entry (what you avoided/missed).
+   Negative => you dodged a drop (good). Positive => market rose while you were out (whipsaw cost). */
+function rotationLog(decided, prices, dates, cfg){
+  const lag=(cfg.timing==="next")?2:1;
+  // executed position over time = decided shifted by lag (you act lag weeks after signal)
+  const n=decided.length, pos=new Array(n).fill(true);
+  for(let i=0;i<n;i++) pos[i]=(i>=lag)?decided[i-lag]:true;
+  const rots=[]; let inMkt=true, exitIdx=null;
+  for(let i=1;i<n;i++){
+    if(inMkt && !pos[i]){ inMkt=false; exitIdx=i; }
+    else if(!inMkt && pos[i]){
+      inMkt=true;
+      const eP=prices[exitIdx], rP=prices[i];
+      rots.push({
+        exitDate:dates[exitIdx], exitPx:eP, reDate:dates[i], rePx:rP,
+        mktMovePct:(rP/eP-1), weeksOut:(i-exitIdx)
+      });
+    }
+  }
+  // if still out at the end
+  if(!inMkt && exitIdx!=null){
+    rots.push({exitDate:dates[exitIdx], exitPx:prices[exitIdx], reDate:null, rePx:prices[n-1], mktMovePct:(prices[n-1]/prices[exitIdx]-1), weeksOut:(n-1-exitIdx)});
+  }
+  return rots;
+}
+</script>
+<script>
+/* ===================== DUAL MOMENTUM ENGINE =====================
+   A separate portfolio-level simulator (NOT the per-ticker mask path).
+   Each rebalance bar: rank tickers by trailing return over `lookback` bars
+   (optionally 12-1, skipping the most recent month), hold the top N equally.
+   Absolute-momentum gate: a winner whose own trailing return is below the
+   SGOV return over the same window is replaced by SGOV for that slot.
+   Between rebalances the held positions ride their own bar returns.
+   ================================================================= */
+
+/* read the momentum config from the UI, converting months -> bars for the interval */
+function readMomentumCfg(cfg){
+  const lookMo   = +document.getElementById("dmLookMo").value || 12;
+  const topN     = Math.max(1, +document.getElementById("dmTopN").value || 1);
+  const rebal    = document.getElementById("dmRebal").value;        // monthly | bars
+  const absMode  = document.getElementById("dmAbs").value;          // sgov | zero | off
+  const skip1    = document.getElementById("dmSkip").checked;       // 12-1
+  const universe = document.getElementById("dmUniverse").value;     // sleeve | papabear
+  const lookMode = document.getElementById("dmLookMode").value;     // single | avg3612
+  // bars per month for the active interval
+  const barsPerMo = (cfg.interval==="1d") ? 21 : (52/12);           // ~4.33 weekly
+  const skipBars  = skip1 ? Math.round(barsPerMo) : 0;
+  const rebalEvery= (rebal==="monthly") ? Math.max(1, Math.round(barsPerMo)) : 1;
+  // lookback windows (in bars). single = one window; avg3612 = mean of 3/6/12-mo returns.
+  let lookWindows;
+  if(lookMode==="avg3612"){
+    lookWindows=[3,6,12].map(m=>Math.max(2,Math.round(m*barsPerMo)));
+  }else{
+    lookWindows=[Math.max(2,Math.round(lookMo*barsPerMo))];
+  }
+  const lookback=Math.max(...lookWindows);  // longest window drives warmup
+  // weekly emergency exit (downside-only mid-month breaker)
+  const weeklyExit = document.getElementById("dmWeeklyExit").checked;
+  const exitMAwk   = Math.max(3, +document.getElementById("dmExitMA").value || 10);
+  const exitPct    = Math.max(0, +document.getElementById("dmExitPct").value || 5)/100;
+  // MA period in bars: the control is in weeks; convert if running daily bars
+  const exitMAbars = (cfg.interval==="1d") ? Math.round(exitMAwk*5) : exitMAwk;
+  return {lookback, lookWindows, lookMode, universe, topN, rebalEvery, absMode, skipBars, lookMo, barsPerMo,
+          weeklyExit, exitMAbars, exitPct, exitMAwk};
+}
+
+/* trailing total return of an aligned close array at index i, over [i-skip-look, i-skip] */
+function trailRet(c, i, lookback, skip){
+  const hi=i-skip, lo=i-skip-lookback;
+  if(lo<0 || hi<0) return null;
+  const a=c[lo], b=c[hi];
+  if(a==null||b==null||isNaN(a)||isNaN(b)||a<=0) return null;
+  return b/a - 1;
+}
+
+/* momentum score: single window -> that trailing return; avg3612 -> mean of the
+   trailing returns over each window. Returns null if any required window is missing
+   (so a name without enough history is simply not ranked that bar). */
+function momScore(c, i, mcfg){
+  const rs=mcfg.lookWindows.map(w=>trailRet(c, i, w, mcfg.skipBars));
+  if(rs.some(r=>r==null)) return null;
+  return rs.reduce((a,b)=>a+b,0)/rs.length;
+}
+
+/* run dual momentum across the aligned sleeve.
+   Returns {curve, dates, eq, exposure, switches, holdLog} */
+function simulateMomentum(grid, aligned, tickers, cfg, mcfg){
+  const N=grid.length;
+  const perBarYld = Math.pow(1+cfg.sgovYld/100, 1/(cfg.ppy||52))-1;
+  // SGOV synthetic price index (compounding the per-bar yield) so it can be ranked too
+  const sgovIdx=new Array(N); sgovIdx[0]=100;
+  for(let i=1;i<N;i++) sgovIdx[i]=sgovIdx[i-1]*(1+perBarYld);
+
+  // per-ticker per-bar returns
+  const ret={}; tickers.forEach(t=>{
+    const a=aligned[t]; const r=new Array(N).fill(0);
+    for(let i=1;i<N;i++) r[i]=(a[i-1]&&a[i])?(a[i]/a[i-1]-1):0;
+    ret[t]=r;
+  });
+
+  // WEEKLY EMERGENCY EXIT: precompute simple MA of each ticker's price (aligned closes)
+  const maSeries={};
+  if(mcfg.weeklyExit){
+    const P=mcfg.exitMAbars;
+    tickers.forEach(t=>{
+      const a=aligned[t]; const ma=new Array(N).fill(null);
+      let sum=0, cnt=0;
+      for(let i=0;i<N;i++){
+        const v=a[i];
+        if(v!=null && !isNaN(v)){ sum+=v; cnt++; }
+        if(i>=P){ const old=a[i-P]; if(old!=null && !isNaN(old)){ sum-=old; cnt--; } }
+        if(cnt>=Math.min(P, 3) && i>=P-1) ma[i]=sum/cnt;
+      }
+      maSeries[t]=ma;
+    });
+  }
+
+  let eq=cfg.cap;
+  const curve=[eq], dates=[grid[0]];
+  let held=[];                 // current holdings: array of {ticker|"SGOV", w}
+  let barsInMkt=0, totalBars=0, switches=0;
+  const holdLog=[];            // {date, picks:[...], ranks:[{t,r}...]}
+  let prevKey="";
+  let exited=new Set();        // tickers emergency-exited mid-month (weekly breaker)
+  let weeklyExitCount=0;       // how many times the weekly breaker fired
+
+  // warmup: need lookback+skip bars before first decision
+  const firstDecide = mcfg.lookback + mcfg.skipBars + 1;
+
+  for(let i=1;i<N;i++){
+    // rebalance?
+    const doRebal = (i>=firstDecide) && ((i-firstDecide) % mcfg.rebalEvery === 0);
+    if(doRebal){
+      // rank tickers by momentum score (single or 3/6/12 average)
+      const ranks=tickers.map(t=>({t, r:momScore(aligned[t], i, mcfg)}))
+                         .filter(x=>x.r!=null)
+                         .sort((a,b)=>b.r-a.r);
+      if(ranks.length){
+        const sgovR = momScore(sgovIdx, i, mcfg) || 0;
+        const winners=ranks.slice(0, mcfg.topN);
+        const picks=winners.map(w=>{
+          // absolute-momentum gate
+          let gateFail=false;
+          if(mcfg.absMode==="sgov") gateFail = (w.r < sgovR);
+          else if(mcfg.absMode==="zero") gateFail = (w.r < 0);
+          return gateFail ? {ticker:"SGOV", w:1/mcfg.topN} : {ticker:w.t, w:1/mcfg.topN};
+        });
+        held=picks;
+        exited=new Set();   // fresh month: clear any prior emergency exits
+        const key=picks.map(p=>p.ticker).sort().join("|");
+        if(key!==prevKey){ switches++; prevKey=key; }
+        holdLog.push({date:grid[i], picks:picks.map(p=>p.ticker),
+                      ranks:ranks.slice(0,5).map(x=>({t:x.t, r:x.r})), sgovR});
+      }
+    }
+    // accrue THIS bar's return FIRST, using the exit state as it stood at the
+    // start of the bar (i.e. decisions made on prior bars' closes). This prevents
+    // lookahead: a breach detected on bar i cannot dodge bar i's own move.
+    let rBar=0, inv=0;
+    if(held.length){
+      held.forEach(h=>{
+        const inCash = (h.ticker==="SGOV") || exited.has(h.ticker);
+        if(inCash){ rBar += h.w*perBarYld; }
+        else { rBar += h.w*ret[h.ticker][i]; inv += h.w; }
+      });
+    }
+    eq *= (1+rBar);
+    curve.push(eq); dates.push(grid[i]);
+    if(i>=firstDecide){ barsInMkt+=inv; totalBars++; }
+
+    // WEEKLY EMERGENCY EXIT: AFTER accruing bar i, evaluate bar i's close as the
+    // SIGNAL. Any breach adds the name to `exited`, which takes effect on bar i+1
+    // (next loop iteration). This is the correct real-world timing: you observe the
+    // close, then trade the next bar. Downside-only; cleared at each rebalance.
+    if(mcfg.weeklyExit && held.length && i>=firstDecide){
+      held.forEach(h=>{
+        if(h.ticker==="SGOV") return;
+        if(exited.has(h.ticker)) return;
+        const ma=maSeries[h.ticker] ? maSeries[h.ticker][i] : null;
+        const px=aligned[h.ticker] ? aligned[h.ticker][i] : null;
+        if(ma!=null && px!=null && px < ma*(1-mcfg.exitPct)){
+          exited.add(h.ticker);   // breach observed at bar i close -> in cash from bar i+1
+          weeklyExitCount++;
+        }
+      });
+    }
+  }
+
+  // CURRENT-MONTH PICKS: rank everyone at the most recent bar (what you'd hold next month)
+  let currentPicks=null;
+  const last=N-1;
+  const lastRanks=tickers.map(t=>({t, r:momScore(aligned[t], last, mcfg)}))
+                         .filter(x=>x.r!=null)
+                         .sort((a,b)=>b.r-a.r);
+  if(lastRanks.length){
+    const sgovRlast = momScore(sgovIdx, last, mcfg) || 0;
+    const winners=lastRanks.slice(0, mcfg.topN);
+    const picks=winners.map(w=>{
+      let gateFail=false;
+      if(mcfg.absMode==="sgov") gateFail=(w.r<sgovRlast);
+      else if(mcfg.absMode==="zero") gateFail=(w.r<0);
+      return {ticker: gateFail?"SGOV":w.t, score:w.r, gated:gateFail};
+    });
+    currentPicks={asOf:grid[last], picks, leaderboard:lastRanks, sgovR:sgovRlast};
+  }
+
+  return {curve, dates, eq, exposure: totalBars?barsInMkt/totalBars:0, switches, holdLog, currentPicks, weeklyExitCount};
+}
+</script>
+<script>
+/* ===================== RESULTS RENDER + SVG CHART ===================== */
+function renderResults(R){
+  const {cfg,mode,scope,startYr,rows,custom,customRule,presets,sim,benchCurve,benchTicker,sB,sBH,sBN,rotLog,momentum}=R;
+  const statBlock=(title,s,eq,color)=>`
+    <div class="stat"><div class="lbl">${title} \u00b7 Terminal</div><div class="val" style="color:${color};">${fmtMoney(eq)}</div></div>
+    <div class="stat"><div class="lbl">${title} \u00b7 CAGR</div><div class="val ${cls(s.cagr)}">${fmtPct(s.cagr)}</div></div>
+    <div class="stat"><div class="lbl">${title} \u00b7 Max DD</div><div class="val neg">${fmtPct(s.maxDD)}</div></div>
+    <div class="stat"><div class="lbl">${title} \u00b7 Sharpe</div><div class="val">${s.sharpe.toFixed(2)}</div></div>`;
+
+  // chart series: custom + each preset + buy&hold + S&P500 benchmark + dual momentum
+  // Distinct, high-contrast palette (varied hues, avoids similar blues/purples clustering)
+  const presetColors=["#E67E00","#0E9D8A","#C2185B","#7A6B00"]; // amber, teal, magenta, olive
+  const chartSeries=[{curve:custom.sim.curveB,color:"#15803D",label:"Your rule"}];        // green
+  presets.forEach((p,i)=> chartSeries.push({curve:p.sim.curveB,color:presetColors[i%presetColors.length],label:p.name.split("(")[0].trim()}));
+  chartSeries.push({curve:sim.curveBH,color:"#1F4E8C",label:"Buy & Hold"});                // deep blue
+  chartSeries.push({curve:benchCurve,color:"#9AA0A6",label:benchTicker+" benchmark (S&P 500)",dash:true}); // grey dashed
+  if(momentum) chartSeries.push({curve:momentum.sim.curve,color:"#8E24AA",label:"Dual momentum"}); // vivid purple
+  const chart=svgCurve(chartSeries, sim.dates);
+
+  // race table rows: custom first, then presets, then buy&hold + benchmark
+  const raceRow=(label,st,eq,bold)=>`<tr><td style="text-align:left;">${bold?"<b>":""}${label}${bold?"</b>":""}</td><td>${fmtMoney(eq)}</td><td class="${cls(st.totalRet)}">${fmtPct(st.totalRet)}</td><td class="${cls(st.cagr)}">${fmtPct(st.cagr)}</td><td class="neg">${fmtPct(st.maxDD)}</td><td>${(st.annVol*100).toFixed(1)}%</td><td>${st.sharpe.toFixed(2)}</td></tr>`;
+  let raceRows=raceRow("Your rule \u2014 "+ruleText(customRule), sB, custom.sim.eqB, true);
+  presets.forEach(p=> raceRows+=raceRow(p.name, p.st, p.sim.eqB, false));
+  raceRows+=raceRow("Buy & Hold (same sleeve)", sBH, sim.eqBH, false);
+  raceRows+=raceRow(benchTicker+" benchmark", sBN, benchCurve[benchCurve.length-1], false);
+  if(momentum){
+    const m=momentum;
+    const uni = (m.mcfg.universe==="papabear") ? "PapaBear13" : "sleeve";
+    const meas = (m.mcfg.lookMode==="avg3612") ? "3/6/12avg" : `${m.mcfg.lookMo}mo${m.mcfg.skipBars?"(12-1)":""}`;
+    const gate = (m.mcfg.absMode==="off") ? "no gate" : (m.mcfg.absMode==="zero" ? "0-gate" : "SGOV-gate");
+    const isPapaBear = (m.mcfg.universe==="papabear" && m.mcfg.lookMode==="avg3612" && m.mcfg.topN===3 && m.mcfg.absMode==="off");
+    const wkx = m.mcfg.weeklyExit ? `, wkExit ${m.mcfg.exitMAwk}wk/-${(m.mcfg.exitPct*100).toFixed(1)}%` : "";
+    const lbl=`Dual momentum \u2014 ${uni}, ${meas}, top ${m.mcfg.topN}, ${gate}${wkx}${isPapaBear&&!m.mcfg.weeklyExit?" \u2605 = published Papa Bear":""}`;
+    raceRows+=raceRow(lbl, m.st, m.sim.eq, false);
+  }
+
+  // find the best performer by CAGR and by Sharpe among breakers (custom+presets[+momentum])
+  const allBreakers=[{name:"Your rule",st:sB},...presets.map(p=>({name:p.name,st:p.st}))];
+  if(momentum) allBreakers.push({name:"Dual momentum",st:momentum.st});
+  const bestCagr=allBreakers.reduce((a,b)=>b.st.cagr>a.st.cagr?b:a);
+  const bestSharpe=allBreakers.reduce((a,b)=>b.st.sharpe>a.st.sharpe?b:a);
+
+  // rotation log (single name)
+  let rotHtml="";
+  if(rotLog){
+    const fmtD=ms=>{ if(!ms) return "\u2014open\u2014"; const d=new Date(ms); return (d.getMonth()+1)+"/"+d.getDate()+"/"+String(d.getFullYear()).slice(2); };
+    const rowsHtml=rotLog.map((r,i)=>{const dodged=r.mktMovePct<0;return `<tr><td>${i+1}</td><td>${fmtD(r.exitDate)}</td><td>$${r.exitPx.toFixed(2)}</td><td>${fmtD(r.reDate)}</td><td>$${r.rePx.toFixed(2)}</td><td>${r.weeksOut}</td><td class="${dodged?'pos':'neg'}">${(r.mktMovePct*100).toFixed(1)}%</td><td>${dodged?'\u2713 dodged drop':'\u2717 whipsaw'}</td></tr>`;}).join("");
+    const dodges=rotLog.filter(r=>r.mktMovePct<0).length, whips=rotLog.filter(r=>r.mktMovePct>=0).length;
+    rotHtml=`<h2>Rotation Log \u2014 ${rows[0].ticker} \u00b7 your custom rule (${cfg.timing==="same"?"same-week":"next-week"} timing)</h2>
+    <div class="panel" style="font-size:12.5px;"><b>${rotLog.length}</b> round-trips \u00b7 <span class="pos">${dodges} dodged a drop</span> \u00b7 <span class="neg">${whips} whipsaws</span> (market rose while you were out). Big negative dodges around 2008/2020 are the breaker earning its keep; many small positive whipsaws are its cost.</div>
+    <table><thead><tr><th>#</th><th>Exit</th><th>Exit px</th><th>Re-entry</th><th>Re px</th><th>Wks out</th><th>Mkt move while out</th><th>Verdict</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+  }
+
+  // dual-momentum holdings log
+  let momHtml="";
+  let pickHtml="";
+  if(momentum && momentum.sim.currentPicks){
+    const m=momentum, cp=m.sim.currentPicks;
+    const d=new Date(cp.asOf);
+    const asOfStr=`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+    const uni=(m.mcfg.universe==="papabear")?"Papa Bear 13-ETF":"5-name sleeve";
+    const meas=(m.mcfg.lookMode==="avg3612")?"3/6/12-mo average":`${m.mcfg.lookMo}-mo`;
+    const isPB=(m.mcfg.universe==="papabear");
+    // detect proxy mode: any held/leaderboard ticker that is a Papa Bear proxy substitution
+    const usingProxies = isPB && (mode!=="live");
+    // label helper: in proxy mode show "PROXY (≈REAL, asset class)"
+    const tickLabel=(t)=>{
+      if(t==="SGOV") return "SGOV";
+      if(!isPB) return t;
+      const info=papabearInfo(t, mode);
+      if(info && info.isProxy) return `${t} <span style="font-size:10px;color:#8a6d3b;">(≈${info.real}, ${info.role})</span>`;
+      if(info) return `${t} <span style="font-size:10px;color:#999;">(${info.role})</span>`;
+      return t;
+    };
+    const proxyBanner = usingProxies ? `
+      <div class="warn" style="margin:0 0 10px;background:#fff3e0;border-color:#e0a060;color:#7a4a00;">
+        \u26A0\uFE0F <b>PROXY MODE \u2014 these are substitute tickers, not the real Papa Bear ETFs.</b>
+        To reach back before the real ETFs existed (VIOG/VIOV launched 2010, PDBC 2014, etc.), each Papa Bear fund is replaced by a longer-history stand-in tracking the <i>same asset class</i>. So <b>IWO\u2248VIOG, IWN\u2248VIOV, EEM\u2248VWO, DBC\u2248PDBC, TLT\u2248EDV, LQD\u2248VCLT, GLD\u2248IAU, IEF\u2248VGIT, BWX\u2248BNDX</b>. The momentum <i>ranking by asset class</i> is valid for the backtest, but the symbols and exact percentages will not match the live website. <b>To compare against the website, re-run in Live mode</b> (current picks only \u2014 live mode lacks the history for the 2007 backtest).
+      </div>` : "";
+    const pickCells=cp.picks.map((p,idx)=>{
+      const pct=Math.round(100/m.mcfg.topN);
+      return `<div class="stat" style="border-color:#cdbce0;background:#faf7fd;">
+        <div class="lbl">Slot ${idx+1} \u00b7 ${pct}%</div>
+        <div class="val" style="color:${p.ticker==='SGOV'?'#B91C1C':'#6b3f99'};">${tickLabel(p.ticker)}</div>
+        <div style="font-size:11px;color:#666;">${p.ticker==='SGOV'?'gated to cash':(p.score*100).toFixed(1)+'% mom'}</div>
+      </div>`;
+    }).join("");
+    const board=cp.leaderboard.map((x,i)=>`<tr><td>${i+1}</td><td style="text-align:left;">${tickLabel(x.t)}</td><td class="${x.r>=0?'pos':'neg'}">${(x.r*100).toFixed(1)}%</td><td>${x.r>=cp.sgovR?'\u2713 above SGOV':'\u2717 below SGOV'}</td></tr>`).join("");
+    const validNote = usingProxies
+      ? `<b>This is proxy mode \u2014 symbols are stand-ins (see orange box above).</b> Validate by <i>asset class</i> against the website, or re-run in Live mode to see the real VIOG/VIOV/VWO symbols.`
+      : `<b>Validate against the live Papa Bear website:</b> if you ran the published config, these tickers should match the site's current top 3 by asset class. A mismatch means a data/calculation issue, or simply a different as-of date.`;
+    pickHtml=`<h2>\uD83D\uDCCC Current-Month Picks \u2014 hold these next month</h2>
+    <div class="panel" style="background:#f3eef8;border-color:#6b3f99;border-width:2px;">
+      ${proxyBanner}
+      <div style="font-size:12.5px;margin-bottom:8px;"><b>${uni} \u00b7 ${meas} \u00b7 top ${m.mcfg.topN}${m.mcfg.absMode!=="off"?" \u00b7 SGOV gate on":" \u00b7 no gate"}</b> \u2014 momentum as of the most recent bar (<b>${asOfStr}</b>). ${validNote}</div>
+      <div class="stat-grid" style="grid-template-columns:repeat(${Math.min(cp.picks.length,4)},1fr);">${pickCells}</div>
+      <div style="font-size:11.5px;margin-top:10px;font-weight:bold;color:#6b3f99;">Full momentum leaderboard (as of ${asOfStr}, SGOV score ${(cp.sgovR*100).toFixed(1)}%):</div>
+      <table style="margin-top:4px;"><thead><tr><th>Rank</th><th>Ticker${usingProxies?" (proxy \u2248 real)":""}</th><th>${meas} momentum</th><th>Absolute gate</th></tr></thead><tbody>${board}</tbody></table>
+      <div class="muted" style="font-size:10.5px;margin-top:6px;">Bar dates are weekly/daily closes from your proxy; the live site uses the prior trading day's close on the last trading day of the month. Small score differences from the website are normal due to the exact as-of date. Rank order is what matters.</div>
+    </div>`;
+  }
+  if(momentum){
+    const m=momentum;
+    const fmtD=ms=>{const d=new Date(ms);return (d.getMonth()+1)+"/"+String(d.getFullYear()).slice(2);};
+    // only show rebalances where the holding actually changed, plus first
+    const log=m.sim.holdLog;
+    const changes=[]; let prev="";
+    log.forEach(h=>{const key=h.picks.slice().sort().join("|"); if(key!==prev){changes.push(h); prev=key;}});
+    const inSgov=v=>v.includes("SGOV");
+    const rowsM=changes.map(h=>{
+      const rk=h.ranks.map(x=>`${x.t} ${(x.r*100).toFixed(0)}%`).join(" · ");
+      return `<tr><td>${fmtD(h.date)}</td><td style="text-align:left;"><b>${h.picks.join(", ")}</b></td><td class="${inSgov(h.picks)?'neg':'pos'}">${inSgov(h.picks)?'in SGOV (abs gate)':'invested'}</td><td style="text-align:left;font-size:11px;color:#666;">${rk}</td></tr>`;
+    }).join("");
+    const sgovStints=changes.filter(h=>inSgov(h.picks)).length;
+    const measTxt = (m.mcfg.lookMode==="avg3612") ? "3/6/12-month averaged momentum" : `${m.mcfg.lookMo}-month lookback${m.mcfg.skipBars?" (12-1 skip)":""}`;
+    const uniTxt  = (m.mcfg.universe==="papabear") ? "Papa Bear 13-ETF universe" : "5-name sleeve";
+    momHtml=`<h2>Dual-Momentum Holdings Log \u2014 ${uniTxt}, ${measTxt}, hold top ${m.mcfg.topN}</h2>
+    <div class="panel" style="font-size:12.5px;background:#f3eef8;border-color:#cdbce0;">
+      <b>${changes.length}</b> holding changes across the window \u00b7 <b>${m.sim.switches}</b> total rebalance switches \u00b7 market exposure <b>${(m.sim.exposure*100).toFixed(0)}%</b> \u00b7 <span class="neg">${sgovStints} rotations into SGOV</span> (absolute-momentum gate firing${m.mcfg.absMode==="off"?", gate OFF":""})${m.mcfg.weeklyExit?` \u00b7 <span class="neg"><b>${m.sim.weeklyExitCount} weekly emergency exits</b></span> (${m.mcfg.exitMAwk}-wk MA, -${(m.mcfg.exitPct*100).toFixed(1)}% trigger)`:""}. The rank column is the momentum leaderboard at each change; the held names are the top ${m.mcfg.topN} that cleared the gate.${m.mcfg.weeklyExit?" The weekly emergency exit additionally pulls a breached holding to cash mid-month; those intra-month exits are counted above but not shown as holding changes (the monthly pick is unchanged \u2014 only its exposure dropped to cash until the next rebalance).":" With the Papa Bear menu the leaderboard can surface gold/Treasuries in a stock bear \u2014 that is the menu defending itself in place of a cash gate."}
+    </div>
+    <table><thead><tr><th>Rebalance</th><th>Held</th><th>State</th><th>Momentum leaderboard (top 5)</th></tr></thead><tbody>${rowsM}</tbody></table>`;
+  }
+
+  document.getElementById("results").innerHTML=`
+    <h2>Results \u2014 ${mode==="live"?"Live tickers":"Proxy-extended"} \u00b7 ${scope==="growth"?"Growth sleeve":"Blended IRA"} \u00b7 from ${startYr}</h2>
+    <div class="stat-grid">${statBlock("Your rule",sB,custom.sim.eqB,"#15803D")}</div>
+    <div class="stat-grid">${statBlock("Buy &amp; Hold",sBH,sim.eqBH,"#2c6e9b")}</div>
+    ${momentum?`<div class="stat-grid">${statBlock("Dual momentum",momentum.st,momentum.sim.eq,"#6b3f99")}</div>`:""}
+    ${pickHtml}
+    <div id="chartWrap">${chart}</div>
+    <h2>Strategy Race</h2>
+    <table><thead><tr><th>Strategy</th><th>Terminal $</th><th>Total return</th><th>CAGR</th><th>Max drawdown</th><th>Ann. vol</th><th>Sharpe</th></tr></thead><tbody>${raceRows}</tbody></table>
+    <div class="panel" style="font-size:12.5px;">
+      <b>Best by CAGR:</b> ${bestCagr.name} (${fmtPct(bestCagr.st.cagr)}) \u00b7
+      <b>best by Sharpe:</b> ${bestSharpe.name} (${bestSharpe.st.sharpe.toFixed(2)}).
+      Buy &amp; hold CAGR was ${fmtPct(sBH.cagr)} at ${fmtPct(sBH.maxDD)} max drawdown. Both the breaker and dual momentum trade some return for a shallower drawdown \u2014 the goal you set: buy-and-hold-like returns without the deep holes. Pick the row whose return/drawdown balance fits your risk tolerance.
+    </div>
+    ${momHtml}
+    ${rotHtml}
+    <div class="muted" style="font-size:11px;margin-top:6px;">
+      Over a bull-heavy window with fast V-shaped recoveries (2009, 2020), trend/breaker rules trail buy &amp; hold on return because they re-enter after the snap-back. Dual momentum behaves differently: it stays invested in <i>whatever</i> is leading and only steps to SGOV when the leader itself is weak, so it tends to keep pace better in bulls while still cutting bear drawdowns \u2014 but it can whipsaw between sleeve names. Judge on the return/drawdown tradeoff, not CAGR alone. Run the robustness check across multiple start years before trusting any single window.
+    </div>`;
+}
+
+function svgCurve(series, dates){
+  const W=920, H=300, pad={l:60,r:185,t:14,b:28};
+  const allV=series.flatMap(s=>s.curve);
+  const min=Math.min(...allV), max=Math.max(...allV);
+  const n=series[0].curve.length;
+  const x=i=> pad.l + (i/(n-1))*(W-pad.l-pad.r);
+  const y=v=> pad.t + (1-(v-min)/(max-min))*(H-pad.t-pad.b);
+  const path=s=> s.curve.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join(" ");
+  // y gridlines
+  let grid="";
+  for(let k=0;k<=4;k++){
+    const v=min+(max-min)*k/4; const yy=y(v);
+    grid+=`<line x1="${pad.l}" y1="${yy}" x2="${W-pad.r}" y2="${yy}" stroke="#e3e8ee"/>
+           <text x="${pad.l-6}" y="${yy+3}" text-anchor="end" font-size="10" fill="#777">${fmtMoney(v)}</text>`;
+  }
+  // x labels (start, mid, end)
+  const d0=new Date(dates[0]), d1=new Date(dates[n-1]);
+  const xlab=`<text x="${pad.l}" y="${H-8}" font-size="10" fill="#777">${d0.getFullYear()}</text>
+              <text x="${W-pad.r}" y="${H-8}" text-anchor="end" font-size="10" fill="#777">${d1.getFullYear()}</text>`;
+  const lines=series.map(s=>{
+    // thinner lines overall; the two headline strategies a touch heavier so they read
+    const emph = (s.label==="Your rule" || s.label==="Dual momentum");
+    const sw = emph ? 1.6 : 1.2;
+    const dash = s.dash ? ` stroke-dasharray="5 3"` : "";
+    return `<path d="${path(s)}" fill="none" stroke="${s.color}" stroke-width="${sw}"${dash} stroke-linejoin="round"/>`;
+  }).join("");
+  const legend=series.map((s,i)=>{
+    const dash = s.dash ? ` stroke-dasharray="4 2"` : "";
+    return `
+    <line x1="${W-pad.r+8}" y1="${pad.t+16+i*18}" x2="${W-pad.r+26}" y2="${pad.t+16+i*18}" stroke="${s.color}" stroke-width="2.2"${dash}/>
+    <text x="${W-pad.r+30}" y="${pad.t+19+i*18}" font-size="10.5" fill="#333">${s.label}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>
+    ${grid}${lines}${xlab}${legend}</svg>`;
+}
+
+/* switch builder labels + sensible default periods when interval changes */
+function onIntervalChange(){
+  const iv=document.getElementById("intervalSel").value;
+  const hdr=document.getElementById("cbHeader");
+  if(hdr) hdr.textContent = "CIRCUIT BREAKER — CONDITION BUILDER ("+(iv==="1d"?"daily":"weekly")+" bars)";
+  if(typeof refreshSigDropdowns==="function") refreshSigDropdowns();
+  // load the standard default rule for the newly-selected interval
+  if(typeof resetBuilder==="function") resetBuilder();
+}
+
+/* populate condition-builder dropdowns */
+function maUnitLabel(){
+  const iv=document.getElementById("intervalSel") ? document.getElementById("intervalSel").value : "1wk";
+  return iv==="1d" ? "MA (days)" : "MA (weeks)";
+}
+function refreshSigDropdowns(){
+  const unit=maUnitLabel();
+  document.querySelectorAll("select.csig").forEach(s=>{
+    const cur=s.value;  // preserve selection
+    s.innerHTML=`<option value="price">Price (close)</option><option value="ma">${unit}</option>`;
+    if(cur) s.value=cur;
+  });
+}
+function initConditionUI(){
+  const opOpts=`<option value="below">closes below</option><option value="above">closes above</option><option value="xbelow">crosses below</option><option value="xabove">crosses above</option><option value="pctbelow">≥X% below</option><option value="pctabove">≥X% above</option>`;
+  document.querySelectorAll("select.cop").forEach(s=> s.innerHTML=opOpts);
+  refreshSigDropdowns();
+  // sensible defaults: exit row1 = Price below 20MA; exit row2 = MA4 xbelow MA10
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  set("ex1a","price"); set("ex1op","below"); set("ex1b","ma");
+  set("ex2a","ma");    set("ex2op","xbelow");set("ex2b","ma");
+  set("re1a","price"); set("re1op","above"); set("re1b","ma");
+  set("re2a","ma");    set("re2op","xabove");set("re2b","ma");
+}
+/* read one condition trio from the UI */
+function readCond(aId,opId,bId,apId,bpId){
+  const sig=(kindId,perId)=>{
+    const kind=document.getElementById(kindId).value;
+    return kind==="price" ? {kind:"price"} : {kind:"ma", period:+document.getElementById(perId).value};
+  };
+  const op=document.getElementById(opId).value;
+  const cond={a:sig(aId,apId), op, b:sig(bId,bpId)};
+  // for percent operators, the "A period" box is reused as the percent (e.g. 4 => 4%)
+  if(op==="pctbelow"||op==="pctabove"){ cond.pct=+document.getElementById(apId).value || 0; }
+  return cond;
+}
+/* read the full custom rule */
+function readCustomRule(){
+  const exit=[readCond("ex1a","ex1op","ex1b","ex1ap","ex1bp")];
+  if(document.getElementById("ex2on").checked) exit.push(readCond("ex2a","ex2op","ex2b","ex2ap","ex2bp"));
+  if(document.getElementById("ex3on").checked) exit.push(readCond("ex3a","ex3op","ex3b","ex3ap","ex3bp"));
+
+  // re-entry condition 1: optionally an AND of two sub-conditions
+  let re1=readCond("re1a","re1op","re1b","re1ap","re1bp");
+  if(document.getElementById("re1and").checked){
+    const re1b=readCond("re1a2","re1op2","re1b2","re1a2p","re1b2p");
+    re1={and:[re1, re1b]};
+  }
+  const reenter=[re1];
+  if(document.getElementById("re2on").checked) reenter.push(readCond("re2a","re2op","re2b","re2ap","re2bp"));
+  return {exit, reenter};
+}
+
+/* toggle the AND sub-row visibility */
+function toggleAndRow(){
+  const on=document.getElementById("re1and").checked;
+  document.getElementById("reRow1b").style.display = on ? "flex" : "none";
+}
+
+/* RESET: load the standard default rule for the current interval into the builder */
+function resetBuilder(){
+  const iv=document.getElementById("intervalSel").value;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  const chk=(id,v)=>{const e=document.getElementById(id); if(e) e.checked=v;};
+  refreshSigDropdowns();
+  if(iv==="1d"){
+    // DAILY default = your 100/25/4% rule, fully shown
+    // exit1: Price below 100
+    set("ex1a","price"); set("ex1ap",0); set("ex1op","below"); set("ex1b","ma"); set("ex1bp",100);
+    // exit2: 4 crosses below 100
+    chk("ex2on",true); set("ex2a","ma"); set("ex2ap",4); set("ex2op","xbelow"); set("ex2b","ma"); set("ex2bp",100);
+    // exit3: Price >=4% below 25
+    chk("ex3on",true); set("ex3a","price"); set("ex3ap",4); set("ex3op","pctbelow"); set("ex3b","ma"); set("ex3bp",25);
+    // re1: Price above 25 AND 4 crosses above 25
+    set("re1a","price"); set("re1ap",0); set("re1op","above"); set("re1b","ma"); set("re1bp",25);
+    chk("re1and",true); set("re1a2","ma"); set("re1a2p",4); set("re1op2","xabove"); set("re1b2","ma"); set("re1b2p",25);
+    // re2: Price above 100
+    chk("re2on",true); set("re2a","price"); set("re2ap",0); set("re2op","above"); set("re2b","ma"); set("re2bp",100);
+  }else{
+    // WEEKLY default = original dual-trigger
+    set("ex1a","price"); set("ex1ap",0); set("ex1op","below"); set("ex1b","ma"); set("ex1bp",20);
+    chk("ex2on",true); set("ex2a","ma"); set("ex2ap",4); set("ex2op","xbelow"); set("ex2b","ma"); set("ex2bp",10);
+    chk("ex3on",false); set("ex3a","price"); set("ex3ap",4); set("ex3op","pctbelow"); set("ex3b","ma"); set("ex3bp",25);
+    set("re1a","price"); set("re1ap",0); set("re1op","above"); set("re1b","ma"); set("re1bp",20);
+    chk("re1and",false); set("re1a2","ma"); set("re1a2p",4); set("re1op2","xabove"); set("re1b2","ma"); set("re1b2p",50);
+    chk("re2on",true); set("re2a","ma"); set("re2ap",4); set("re2op","xabove"); set("re2b","ma"); set("re2bp",50);
+  }
+  toggleAndRow();
+}
+function condText(cond){
+  if(cond.and) return "("+cond.and.map(condText).join(" AND ")+")";
+  const iv=(document.getElementById("intervalSel")||{}).value;
+  const unit=iv==="1d"?"d":"wk";
+  const s=sig=> sig.kind==="price"?"Price":`${sig.period}${unit}MA`;
+  const op={below:"<",above:">",xbelow:"x↓",xabove:"x↑",pctbelow:`≥${cond.pct||0}% below`,pctabove:`≥${cond.pct||0}% above`}[cond.op];
+  return `${s(cond.a)} ${op} ${s(cond.b)}`;
+}
+function ruleText(rule){
+  return `exit: ${rule.exit.map(condText).join(" OR ")} · re-enter: ${rule.reenter.map(condText).join(" OR ")}`;
+}
+
+initConditionUI();
+// wire the AND-row toggle
+(function(){ const cb=document.getElementById("re1and"); if(cb) cb.addEventListener("change", toggleAndRow); })();
+// load the correct default rule into the builder on first load
+resetBuilder();
+renderSleeve();
+
+/* ---- dual-momentum UI dynamics ---- */
+function syncMomentumUI(){
+  const mode=document.getElementById("dmLookMode").value;
+  const moWrap=document.getElementById("dmLookMoWrap");
+  const skipWrap=document.getElementById("dmSkipWrap");
+  if(moWrap)  moWrap.style.display  = (mode==="avg3612") ? "none" : "flex";
+  // 12-1 skip is a single-lookback convention; hide it for the 3/6/12 average
+  if(skipWrap) skipWrap.style.display = (mode==="avg3612") ? "none" : "flex";
+}
+(function(){
+  const lm=document.getElementById("dmLookMode"); if(lm) lm.addEventListener("change", syncMomentumUI);
+  syncMomentumUI();
+})();
+
+/* stamp the print date into the print-only header before printing */
+window.addEventListener("beforeprint", function(){
+  const el=document.getElementById("printDate");
+  if(el){
+    const d=new Date();
+    el.textContent="Printed "+d.toLocaleDateString()+" "+d.toLocaleTimeString();
+  }
+});
+</script>
+</body></html>
